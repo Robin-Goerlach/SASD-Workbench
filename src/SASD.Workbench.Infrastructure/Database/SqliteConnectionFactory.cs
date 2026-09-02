@@ -13,8 +13,8 @@ public sealed class SqliteConnectionFactory
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
 
-        var fullPath = Path.GetFullPath(databasePath);
-        var directory = Path.GetDirectoryName(fullPath);
+        DatabasePath = Path.GetFullPath(databasePath);
+        var directory = Path.GetDirectoryName(DatabasePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -22,7 +22,7 @@ public sealed class SqliteConnectionFactory
 
         var builder = new SqliteConnectionStringBuilder
         {
-            DataSource = fullPath,
+            DataSource = DatabasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Shared,
             ForeignKeys = true
@@ -30,6 +30,11 @@ public sealed class SqliteConnectionFactory
 
         _connectionString = builder.ToString();
     }
+
+    /// <summary>
+    /// Gets the canonical database file path used by this factory.
+    /// </summary>
+    public string DatabasePath { get; }
 
     /// <summary>
     /// Opens a SQLite connection and applies connection-local safety settings.
