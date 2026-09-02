@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SASD.Workbench.Domain/SASD.Workbench.Domain.csproj" />
+    <Project Path="src/SASD.Workbench.Application/SASD.Workbench.Application.csproj" />
+    <Project Path="src/SASD.Workbench.Infrastructure/SASD.Workbench.Infrastructure.csproj" />
+    <Project Path="src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj" />
+  </Folder>
+</Solution>
