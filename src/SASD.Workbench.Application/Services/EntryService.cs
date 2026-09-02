@@ -57,18 +57,13 @@ public sealed class EntryService
         CancellationToken cancellationToken = default)
     {
         var entry = await RequireEntryAsync(id, cancellationToken).ConfigureAwait(false);
-        var now = _clock.UtcNow;
-        entry.UpdateContent(title, summary, contentMarkdown, now);
-
-        if (!string.IsNullOrWhiteSpace(entryType) && !string.Equals(entry.EntryType, entryType.Trim(), StringComparison.Ordinal))
-        {
-            entry.ChangeType(entryType, now);
-        }
-
-        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(entry.Status, status.Trim(), StringComparison.Ordinal))
-        {
-            entry.ChangeStatus(status, now);
-        }
+        entry.Update(
+            title,
+            summary,
+            contentMarkdown,
+            string.IsNullOrWhiteSpace(entryType) ? entry.EntryType : entryType,
+            string.IsNullOrWhiteSpace(status) ? entry.Status : status,
+            _clock.UtcNow);
 
         await _entries.UpdateAsync(entry, cancellationToken).ConfigureAwait(false);
         return entry;
