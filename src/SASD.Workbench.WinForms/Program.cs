@@ -28,7 +28,7 @@ internal static class Program
             var projectService = new ProjectService(projectRepository, clock);
             var entryService = new EntryService(projectRepository, entryRepository, clock);
 
-            Application.Run(new MainForm(projectService, entryService, paths));
+            System.Windows.Forms.Application.Run(new MainForm(projectService, entryService, paths));
         }
         catch (Exception ex)
         {
