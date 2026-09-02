@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/SASD.Workbench.Application/SASD.Workbench.Application.csproj" />
+    <ProjectReference Include="../../src/SASD.Workbench.Domain/SASD.Workbench.Domain.csproj" />
+    <ProjectReference Include="../../src/SASD.Workbench.Infrastructure/SASD.Workbench.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
