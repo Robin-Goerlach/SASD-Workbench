@@ -102,33 +102,21 @@ public sealed class Entry
     }
 
     /// <summary>
-    /// Replaces editable content while preserving identity and project relation.
+    /// Updates all ordinary editable fields as one logical save operation.
     /// </summary>
-    public void UpdateContent(string title, string? summary, string? contentMarkdown, DateTime updatedAtUtc)
+    public void Update(
+        string title,
+        string? summary,
+        string? contentMarkdown,
+        string entryType,
+        string status,
+        DateTime updatedAtUtc)
     {
         EnsureMutable();
         Title = NormalizeRequired(title, nameof(title), 300);
         Summary = NormalizeOptional(summary);
         ContentMarkdown = contentMarkdown ?? string.Empty;
-        Touch(updatedAtUtc);
-    }
-
-    /// <summary>
-    /// Changes the neutral entry type metadata.
-    /// </summary>
-    public void ChangeType(string entryType, DateTime updatedAtUtc)
-    {
-        EnsureMutable();
         EntryType = NormalizeRequired(entryType, nameof(entryType), 100);
-        Touch(updatedAtUtc);
-    }
-
-    /// <summary>
-    /// Changes the workflow status without imposing profile-specific status rules.
-    /// </summary>
-    public void ChangeStatus(string status, DateTime updatedAtUtc)
-    {
-        EnsureMutable();
         Status = NormalizeRequired(status, nameof(status), 50);
         Touch(updatedAtUtc);
     }
