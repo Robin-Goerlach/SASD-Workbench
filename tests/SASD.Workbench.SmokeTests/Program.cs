@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
+using System.Text;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Services;
 using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
+using SASD.Workbench.Infrastructure.FileStorage;
 using SASD.Workbench.Infrastructure.Repositories;
 
 namespace SASD.Workbench.SmokeTests;
@@ -27,9 +30,17 @@ internal static class Program
 
             var projectRepository = new SqliteProjectRepository(connections);
             var entryRepository = new SqliteEntryRepository(connections);
+            var templateRepository = new SqliteTemplateRepository(connections);
+            var tagRepository = new SqliteTagRepository(connections);
+            var attachmentRepository = new SqliteAttachmentRepository(connections);
+            var fileStorage = new LocalFileStorageService(paths);
             var clock = new TestClock(new DateTime(2026, 9, 2, 12, 0, 0, DateTimeKind.Utc));
+
             var projectService = new ProjectService(projectRepository, clock);
             var entryService = new EntryService(projectRepository, entryRepository, clock);
+            var templateService = new TemplateService(templateRepository, projectRepository, entryRepository, clock);
+            var tagService = new TagService(tagRepository, entryRepository, clock);
+            var attachmentService = new AttachmentService(attachmentRepository, entryRepository, projectRepository, fileStorage, clock);
 
             var project = await projectService.CreateAsync("Core smoke test", "Persistence round-trip", "general");
             Assert(project.Version == 1, "A new project must start at version 1.");
@@ -69,26 +80,74 @@ internal static class Program
             Assert(reloadedEntry.ContentMarkdown.Contains("Updated body", StringComparison.Ordinal), "Markdown content was not persisted.");
             Assert(reloadedEntry.Version == 2, "The persisted entry version is incorrect.");
 
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var template = await templateService.CreateAsync(
+                "Research note",
+                "research_note",
+                "draft",
+                "# Question\n\n## Sources\n\n## Findings\n",
+                profileKey: "general",
+                description: "Reusable research note template");
+            var templateEntries = await templateService.ListAsync(profileKey: "general");
+            Assert(templateEntries.Count == 1 && templateEntries[0].Id == template.Id, "Template round-trip failed.");
+
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var templatedEntry = await templateService.CreateEntryAsync(project.Id, template.Id, "Template-created entry");
+            Assert(templatedEntry.EntryType == "research_note", "Template entry type was not copied.");
+            Assert(templatedEntry.Status == "draft", "Template default status was not copied.");
+            Assert(templatedEntry.ContentMarkdown.Contains("## Sources", StringComparison.Ordinal), "Template Markdown was not copied.");
+            Assert(templatedEntry.Version == 1, "A template-created entry must begin at version 1.");
+
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var tag = await tagService.GetOrCreateAsync("Research");
+            var sameTag = await tagService.GetOrCreateAsync(" research ");
+            Assert(tag.Id == sameTag.Id, "Tag lookup must be case/whitespace normalized.");
+            await tagService.AttachAsync(templatedEntry.Id, tag.Id);
+            await tagService.AttachAsync(templatedEntry.Id, tag.Id);
+            var tags = await tagService.ListByEntryAsync(templatedEntry.Id);
+            Assert(tags.Count == 1 && tags[0].Id == tag.Id, "Tag assignment must be idempotent.");
+
+            var sourcePath = Path.Combine(root, "source-attachment.txt");
+            const string sourceContent = "SASD Workbench controlled attachment smoke test.";
+            await File.WriteAllTextAsync(sourcePath, sourceContent, Encoding.UTF8);
+            var expectedHash = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(sourcePath)));
+
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var attachment = await attachmentService.AddAsync(templatedEntry.Id, sourcePath, "Smoke test attachment");
+            Assert(attachment.Sha256Hash == expectedHash, "Attachment SHA-256 hash is incorrect.");
+            Assert(attachment.FileSize > 0, "Attachment file size was not recorded.");
+            var storedPath = Path.Combine(paths.AttachmentsDirectory, attachment.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert(File.Exists(storedPath), "Attachment was not copied into controlled storage.");
+            Assert(await File.ReadAllTextAsync(storedPath) == sourceContent, "Stored attachment content differs from the source.");
+
+            var attachments = await attachmentService.ListByEntryAsync(templatedEntry.Id);
+            Assert(attachments.Count == 1 && attachments[0].Id == attachment.Id, "Attachment metadata round-trip failed.");
+            clock.Advance(TimeSpan.FromMinutes(1));
+            await attachmentService.DeleteAsync(attachment.Id);
+            attachments = await attachmentService.ListByEntryAsync(templatedEntry.Id);
+            Assert(attachments.Count == 0, "Soft-deleted attachments must not appear in normal lists.");
+            Assert(File.Exists(storedPath), "Soft-delete must retain the physical attachment until explicit cleanup.");
+
             var entries = await entryService.ListByProjectAsync(project.Id);
-            Assert(entries.Count == 1, "Exactly one active entry was expected.");
+            Assert(entries.Count == 2, "Two active entries were expected before deleting the original entry.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
             await entryService.DeleteAsync(entry.Id);
             entries = await entryService.ListByProjectAsync(project.Id);
-            Assert(entries.Count == 0, "Soft-deleted entries must not appear in the normal project list.");
+            Assert(entries.Count == 1 && entries[0].Id == templatedEntry.Id, "Soft-deleted entries must not appear in the normal project list.");
 
             var deletedEntry = await entryRepository.GetByIdAsync(entry.Id)
                 ?? throw new InvalidOperationException("The soft-deleted entry could not be reloaded.");
             Assert(deletedEntry.IsDeleted, "Soft-delete state was not persisted.");
 
-            await VerifyMigrationCountAsync(connections, expectedCount: 1);
+            await VerifyMigrationCountAsync(connections, expectedCount: 2);
 
-            Console.WriteLine("SASD Workbench V0.1 smoke tests passed.");
+            Console.WriteLine("SASD Workbench V0.5 smoke tests passed.");
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine("SASD Workbench V0.1 smoke tests FAILED.");
+            Console.Error.WriteLine("SASD Workbench V0.5 smoke tests FAILED.");
             Console.Error.WriteLine(ex);
             return 1;
         }
