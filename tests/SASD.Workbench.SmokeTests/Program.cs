@@ -61,8 +61,8 @@ internal static class Program
                 "in_work");
             Assert(savedEntry.Version == 2, "One logical entry save must advance the version exactly once.");
 
-            var reloadedEntry = await entryService.GetByIdAsync(entry.Id);
-            Assert(reloadedEntry is not null, "The entry could not be reloaded.");
+            var reloadedEntry = await entryService.GetByIdAsync(entry.Id)
+                ?? throw new InvalidOperationException("The entry could not be reloaded.");
             Assert(reloadedEntry.Title == "First entry updated", "The updated entry title was not persisted.");
             Assert(reloadedEntry.EntryType == "research_note", "The updated entry type was not persisted.");
             Assert(reloadedEntry.Status == "in_work", "The updated entry status was not persisted.");
@@ -77,8 +77,9 @@ internal static class Program
             entries = await entryService.ListByProjectAsync(project.Id);
             Assert(entries.Count == 0, "Soft-deleted entries must not appear in the normal project list.");
 
-            var deletedEntry = await entryRepository.GetByIdAsync(entry.Id);
-            Assert(deletedEntry is not null && deletedEntry.IsDeleted, "Soft-delete state was not persisted.");
+            var deletedEntry = await entryRepository.GetByIdAsync(entry.Id)
+                ?? throw new InvalidOperationException("The soft-deleted entry could not be reloaded.");
+            Assert(deletedEntry.IsDeleted, "Soft-delete state was not persisted.");
 
             await VerifyMigrationCountAsync(connections, expectedCount: 1);
 
