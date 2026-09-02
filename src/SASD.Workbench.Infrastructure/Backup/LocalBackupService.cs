@@ -238,7 +238,7 @@ public sealed class LocalBackupService : IBackupService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var normalized = entry.FullName.Replace('\\', '/');
-            if (normalized.EndsWith('/', StringComparison.Ordinal))
+            if (normalized.EndsWith("/", StringComparison.Ordinal))
             {
                 continue;
             }
