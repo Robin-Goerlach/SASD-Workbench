@@ -30,7 +30,7 @@ jobs:
 
       # xUnit v3 test projects are standalone executables. Running the focused layers separately keeps
       # failures attributable: domain/application rules first, then real SQLite/file-system integration,
-      # and finally the broad production-composition smoke workflow.
+      # host-only startup/configuration behavior, and finally the broad production-composition workflow.
       - name: Run domain unit tests
         run: dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
 
@@ -39,6 +39,9 @@ jobs:
 
       - name: Run infrastructure integration tests
         run: dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
+
+      - name: Run WinForms host tests
+        run: dotnet run --project tests/SASD.Workbench.WinForms.Tests/SASD.Workbench.WinForms.Tests.csproj --configuration Release --no-build
 
       - name: Run V1 core smoke tests
         run: dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
