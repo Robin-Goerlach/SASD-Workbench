@@ -37,6 +37,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Transactional automatic activity recording for SQLite-backed project, entry, template, tag, collection, relation and attachment-metadata mutations.
 - Developer Guide describing shared-Core extension rules, migration/storage boundaries and host composition.
 - Test Strategy covering unit/integration growth, the real SQLite smoke path, recovery gates and failure-path expectations.
+- V1 Internal Acceptance Test checklist for repeatable desktop, recovery and UX validation.
 - ADR-003 documenting lightweight activity-history guarantees and explicit non-goals.
 
 ### Changed
