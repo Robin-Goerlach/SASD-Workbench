@@ -13,8 +13,12 @@ namespace SASD.Workbench.Infrastructure.Activity;
 /// supplies the same transaction used for the domain write, the database mutation and its activity
 /// record commit or roll back together. This is deliberately a lightweight history mechanism, not a
 /// tamper-evident or regulatory audit trail.
+///
+/// The type is public only because the SQLite repository constructors are public for dependency
+/// injection. It remains an Infrastructure implementation detail; Workbench hosts should register the
+/// Core through <c>AddSasdWorkbenchCore(...)</c> instead of resolving this writer directly.
 /// </remarks>
-internal sealed class SqliteActivityWriter
+public sealed class SqliteActivityWriter
 {
     private readonly IClock _clock;
 
