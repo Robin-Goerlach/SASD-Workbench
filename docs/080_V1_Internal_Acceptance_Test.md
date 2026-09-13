@@ -129,6 +129,26 @@ Erwartung:
 - Projekt und Entry vollständig vorhanden.
 - Text `BlueOrchid-4711` unverändert vorhanden.
 
+### AT-013 – stale Editor darf neueren Stand nicht überschreiben
+
+Dieser Test verwendet bewusst zwei gleichzeitig gestartete Workbench-Instanzen mit demselben **Test-Datenbestand**.
+
+1. Workbench A und Workbench B starten.
+2. In beiden Instanzen denselben `First acceptance note` auswählen, sodass beide denselben Ausgangsstand geladen haben.
+3. In Workbench A Titel oder Markdown deutlich ändern und speichern.
+4. In Workbench B **ohne vorherigen Reload** einen anderen Text eingeben und speichern.
+
+Erwartung:
+
+- Save in Workbench A funktioniert.
+- Workbench B überschreibt den neueren Stand aus A **nicht**.
+- Workbench B zeigt einen verständlichen Concurrency-/Reload-Hinweis statt einer SQLite-spezifischen Fehlermeldung.
+- der ungespeicherte Text aus Workbench B bleibt im Editor sichtbar und kann kopiert bzw. manuell mit dem neueren Stand zusammengeführt werden.
+- erneutes Laden zeigt den zuletzt erfolgreich persistierten Stand aus Workbench A.
+- erst nach bewusster Übernahme/Merge darf ein neuer Save gegen die aktuelle Version erfolgen.
+
+Wenn parallele Instanzen auf der Testmaschine aus einem anderen Grund nicht möglich sind, Test als `BLOCKED` dokumentieren; die Core-Garantie wird zusätzlich automatisiert auf Application- und SQLite-Ebene geprüft.
+
 ## 6. Templates
 
 ### AT-020 – aktuellen Entry als projektlokales Template speichern
@@ -509,6 +529,7 @@ V1 kann als intern belastbar betrachtet werden, wenn:
 - kein Critical-/High-Finding offen ist,
 - Backup/Restore einschließlich Neustart bestanden hat,
 - Datenpersistenz nach Neustart bestanden hat,
+- stale Editoren keinen neueren Stand still überschreiben,
 - Templates/Tags/Attachments praktisch nutzbar sind,
 - Search/Collections/Relations praktisch nutzbar sind,
 - automatische Activity History plausibel ist,
