@@ -42,6 +42,8 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Focused WinForms content dialogs for reusable templates, tag assignments and controlled attachments.
 - Desktop workflow for creating entries from templates and saving the current entry as a project- or profile-scoped template.
 - Desktop attachment comment editing backed by the shared Application service.
+- Layered xUnit v3 test projects for Domain rules, Application use cases and real SQLite/file-system Infrastructure integration.
+- Focused regression coverage for wildcard-safe entry search, cross-project relation rejection and transactional attachment compensation after a forced activity failure.
 
 ### Changed
 
@@ -54,6 +56,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - The V1 smoke test now forces an activity-write failure to verify rollback and verifies that backup/restore returns activity history to the same point in time as the restored data.
 - Profile-specific template queries now also include shared `general` templates, matching the existing template-use rules for specialist Workbench hosts.
 - The V1 acceptance checklist now covers templates, tags, attachments and their recovery/activity behavior before V2 work begins.
+- CI now runs focused Domain, Application and Infrastructure tests before the broad V1 Core smoke test so failures are localized to the smallest useful layer.
 
 ### Fixed
 
