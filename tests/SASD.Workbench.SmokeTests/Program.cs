@@ -86,7 +86,12 @@ internal static class Program
             Assert(projects.Count == 1 && projects[0].Id == project.Id, "Project round-trip failed.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
-            var updatedProject = await projectService.UpdateAsync(project.Id, "Core smoke test renamed", "Updated", "general");
+            var updatedProject = await projectService.UpdateAsync(
+                project.Id,
+                project.Version,
+                "Core smoke test renamed",
+                "Updated",
+                "general");
             Assert(updatedProject.Version == 2, "Updating a project must advance its version once.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
@@ -100,6 +105,7 @@ internal static class Program
             clock.Advance(TimeSpan.FromMinutes(1));
             var savedEntry = await entryService.UpdateAsync(
                 entry.Id,
+                entry.Version,
                 "First entry updated",
                 "Updated summary",
                 "# First entry\n\nUpdated body with searchable phrase AlphaBeta.",
@@ -133,7 +139,7 @@ internal static class Program
             var specialistProject = await projectService.CreateAsync("Specialist template consumer", profileKey: "biblical");
             var specialistTemplates = await templateService.ListAsync(specialistProject.Id, specialistProject.ProfileKey);
             Assert(specialistTemplates.Any(candidate => candidate.Id == template.Id), "A general template was hidden from a specialist profile.");
-            await projectService.DeleteAsync(specialistProject.Id);
+            await projectService.DeleteAsync(specialistProject.Id, specialistProject.Version);
             Assert((await projectService.ListAsync()).Count == 1, "Deleted specialist test project remained in the active project list.");
 
             // User-managed templates can be project-local and soft-deleted independently of entries.
@@ -244,7 +250,7 @@ internal static class Program
 
             // Deliberately damage/change live state after the backup, then prove restore returns to the backed-up state.
             clock.Advance(TimeSpan.FromMinutes(1));
-            await entryService.DeleteAsync(entry.Id);
+            await entryService.DeleteAsync(entry.Id, savedEntry.Version);
             await attachmentService.DeleteAsync(attachment.Id);
             File.Delete(storedPath);
             await projectService.CreateAsync("Created after backup");
