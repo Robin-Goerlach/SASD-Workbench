@@ -28,12 +28,16 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Portable Markdown project export including attachment copies and hashes.
 - Full local backup/restore with SQLite snapshots, archive validation, path-traversal protection and pre-restore safety backups.
 - Shared `AddSasdWorkbenchCore(...)` dependency-injection registration for reusable Workbench hosts.
+- Profile-neutral V1 entry type catalog for notes, research questions, sources, observations, hypotheses, findings and conclusions.
+- Profile-neutral Core template catalog for the shared V1 research/knowledge workflow.
+- Central open relation vocabulary with stable built-in keys and validation for profile-defined relation keys.
 
 ### Changed
 
 - Implementation baseline moved from the original .NET 8 planning assumption to .NET 10 LTS for the new shared codebase.
 - WinForms startup now consumes the same canonical Core registration that future specialist Workbench hosts can reuse.
 - The V1 Core smoke test now validates the production composition root in addition to real persistence, migration, search, export and backup/restore round-trips.
+- Entry relations now normalize stable machine keys to lowercase snake case while still allowing future profile-specific relation types.
 
 ### Fixed
 

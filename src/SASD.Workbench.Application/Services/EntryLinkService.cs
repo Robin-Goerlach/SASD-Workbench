@@ -1,5 +1,6 @@
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
 
 namespace SASD.Workbench.Application.Services;
 
@@ -25,7 +26,7 @@ public sealed class EntryLinkService
     public async Task<EntryLink> CreateAsync(
         Guid sourceEntryId,
         Guid targetEntryId,
-        string relationType = "related_to",
+        string relationType = EntryRelationTypes.RelatedTo,
         string? comment = null,
         string? createdBy = null,
         CancellationToken cancellationToken = default)

@@ -47,6 +47,26 @@ Die Priorität lautet:
 - Template-basierte Entry-Erzeugung
 - erweiterter Smoke Test
 
+### V1.0 – Core Backend / Recovery Foundation
+
+Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und über den End-to-End-Smoke-Test abgesichert:
+
+- hierarchische Collections
+- Mehrfachzuordnung von Entries zu Collections
+- typisierte Entry Relations
+- Activity Log Light
+- Suche und Filter
+- Markdown-Projektexport
+- Full Backup mit SQLite-Snapshot
+- validierter Restore mit Safety Backup
+- Schutz gegen Restore-Path-Traversal
+- gemeinsamer `AddSasdWorkbenchCore(...)` Composition Root für spätere Workbench-Hosts
+- zentrale profile-neutrale Entry-Type-Schlüssel
+- offenes, validiertes Relation-Vokabular
+- wiederverwendbare profile-neutrale Core-Template-Definitionen
+
+Noch nicht abgeschlossen ist insbesondere die vollständige Desktop-Integration der V1-Funktionen.
+
 ---
 
 ## 3. V1.0 – Local Core
@@ -55,21 +75,21 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 
 ### Muss
 
-- Collections mit Hierarchie
-- Entry kann mehreren Collections angehören
-- Entry Relations
-- Activity Log Light
-- Suche und Filter
-- Markdown-Projektexport
-- Full Backup
-- validierter Restore
-- WinForms-Integration der Kernfunktionen
-- Migrationstests
-- dokumentierter lokaler Datenpfad
+- [x] Collections mit Hierarchie
+- [x] Entry kann mehreren Collections angehören
+- [x] Entry Relations
+- [x] Activity Log Light
+- [x] Suche und Filter
+- [x] Markdown-Projektexport
+- [x] Full Backup
+- [x] validierter Restore
+- [ ] WinForms-Integration der Kernfunktionen
+- [x] Migrationen im realen End-to-End-Smoke-Test wiederholt/idempotent ausführen
+- [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
 
 ### Relation Types
 
-Bereits früh allgemein halten:
+Zentral im Core definiert und als offenes Machine-Key-Vokabular validiert:
 
 ```text
 related_to
@@ -89,11 +109,15 @@ uses
 compares_with
 ```
 
+Fachprofile dürfen weitere valide Relation Keys ergänzen; der Core verwendet bewusst kein geschlossenes Enum. Siehe `docs/adr/ADR-002-open-core-vocabulary.md`.
+
 ### Generische Entry Types
 
-Zusätzlich zu bisherigen Typen:
+Im gemeinsamen Core als stabile Schlüssel vorhanden:
 
 ```text
+note
+research_note
 research_question
 research_source
 observation
@@ -102,7 +126,7 @@ finding
 conclusion
 ```
 
-Diese Typen benötigen noch keine eigenen Tabellen.
+Diese Typen benötigen keine eigenen Tabellen. Die Liste ist offen für weitere profilspezifische Typen außerhalb des Core.
 
 ---
 
@@ -112,18 +136,21 @@ V1.1 soll kleine, risikoarme Funktionen ergänzen, die mehrere Profile sofort nu
 
 ### Geplant
 
-- Research Question Template
-- Research Source Template
-- Observation Template
-- Hypothesis Template
-- External Links / References
-- bessere Relation-UI
-- Backlink-Anzeige
-- Attachment-Kommentare
-- Attachment Templates
-- Checklists
-- bessere Suche / Filter UX
-- erste Quellen-Metadaten ohne vollständige Literaturverwaltung
+- [x] profile-neutrale Definition für Research Question Template
+- [x] profile-neutrale Definition für Research Source Template
+- [x] profile-neutrale Definition für Observation Template
+- [x] profile-neutrale Definition für Hypothesis Template
+- [ ] kontrollierte Installation/Aktualisierung kanonischer System-Templates in persistenten Workbench-Daten
+- [ ] External Links / References
+- [ ] bessere Relation-UI
+- [ ] Backlink-Anzeige
+- [ ] Attachment-Kommentare
+- [ ] Attachment Templates
+- [ ] Checklists
+- [ ] bessere Suche / Filter UX
+- [ ] erste Quellen-Metadaten ohne vollständige Literaturverwaltung
+
+Die Core-Template-Skelette liegen zunächst als kanonischer Katalog im Application Layer vor. Eine automatische SQLite-Seed-Logik wird bewusst erst eingeführt, wenn Identität, Benutzeranpassungen und Update-/Override-Regeln für System-Templates geklärt sind.
 
 ### Nicht Teil von V1.1
 
@@ -259,16 +286,18 @@ Funktionen wie Timeline, Relations, Sources, Measurements und Context Snapshots 
 
 ## 8. Reihenfolge der nächsten Entwicklungsschritte
 
-Nach Abschluss und Verifikation des aktuellen V1-Core-Branches:
+Stand 2026-09-13:
 
-1. V1-Core CI vollständig grün bekommen.
-2. Collections, Suche, Relations, Export und Backup in WinForms integrieren.
-3. Activity Log in UI sichtbar machen.
-4. `research_question`, `research_source`, `observation`, `hypothesis` als neutrale Entry Types/Templates ergänzen.
-5. Relation Types zentral definieren und validieren.
-6. Developer Guide und Test Strategy ergänzen.
-7. V1 internen Nutzertest durchführen.
-8. Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
+1. [x] V1-Core CI vollständig grün bekommen und Backend-/Recovery-Funktionen nach `main` übernehmen.
+2. [x] Gemeinsamen profile-neutralen Composition Root schaffen, damit spätere Workbench-Hosts keine Core-Verdrahtung kopieren.
+3. [x] `research_question`, `research_source`, `observation`, `hypothesis`, `finding` und `conclusion` als neutrale Core Entry Types und Template-Definitionen ergänzen.
+4. [x] Relation Types zentral definieren und als offenes Vokabular validieren.
+5. [ ] Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
+6. [ ] Activity Log in UI sichtbar machen.
+7. [ ] WinForms-Shell in fokussierte Controls/Dialoge zerlegen, damit neue Core-Funktionen `MainForm` nicht monolithisch machen.
+8. [ ] Developer Guide und Test Strategy ergänzen.
+9. [ ] V1 internen Nutzertest durchführen.
+10. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
 
 ---
 
