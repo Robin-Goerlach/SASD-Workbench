@@ -64,11 +64,15 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - zentrale profile-neutrale Entry-Type-Schlüssel
 - offenes, validiertes Relation-Vokabular
 - wiederverwendbare profile-neutrale Core-Template-Definitionen
-- fokussierte WinForms-Dialoge für Search, Collections, Relations und Activity
+- fokussierte WinForms-Dialoge für Templates, Tags, Attachments, Search, Collections, Relations und Activity
 - Desktop-Kommandos für Export sowie Backup/Restore
+- editierbare Attachment-Kommentare
+- projektlokale und profilweite Benutzertemplates
+- allgemeine Templates bleiben in Spezialprofilen sichtbar und nutzbar
 - Developer Guide und dokumentierte Teststrategie
+- vorbereitete interne V1-Abnahmecheckliste
 
-Für den internen V1-Einsatz fehlen vor allem noch ein strukturierter Nutzertest und die anschließende Konsolidierung der dabei gefundenen Bedienungs-/Qualitätsprobleme.
+Für den internen V1-Einsatz fehlt jetzt vor allem der **reale strukturierte Nutzertest** und die anschließende Konsolidierung seiner Findings. Bis dahin bleibt der Status „prepared for internal acceptance“, nicht „abgenommen“.
 
 ---
 
@@ -78,6 +82,11 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 
 ### Muss
 
+- [x] Projects / Entries als persistenter lokaler Arbeitskern
+- [x] Templates mit Entry-Erzeugung
+- [x] Tags und Entry-Tag-Zuordnungen
+- [x] kontrollierte Attachments mit SHA-256
+- [x] Attachment-Kommentare bearbeiten
 - [x] Collections mit Hierarchie
 - [x] Entry kann mehreren Collections angehören
 - [x] Entry Relations
@@ -88,13 +97,18 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] Markdown-Projektexport
 - [x] Full Backup
 - [x] validierter Restore
-- [x] WinForms-Integration der V1-Kernfunktionen Search / Collections / Relations / Activity / Export / Backup / Restore
+- [x] WinForms-Integration der V1-Kernfunktionen Templates / Tags / Attachments / Search / Collections / Relations / Activity / Export / Backup / Restore
 - [x] Migrationen im realen End-to-End-Smoke-Test wiederholt/idempotent ausführen
 - [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
 - [x] Developer Guide
 - [x] Test Strategy
+- [x] interne V1-Abnahmecheckliste vorbereitet
+- [ ] interne V1-Abnahmecheckliste auf realem Windows-Desktop ausgeführt
+- [ ] Findings priorisiert und Critical-/High-Findings geschlossen
 
 Die Activity History bleibt bewusst ein leichtgewichtiges chronologisches Protokoll. Sie ist kein manipulationssicherer regulatorischer Audit Trail. Siehe `docs/adr/ADR-003-transactional-lightweight-activity-history.md`.
+
+Attachments werden im kontrollierten Storage gehalten. Soft Delete entfernt aktuell die aktive Metadatenzuordnung, löscht die physische Datei aber bewusst nicht sofort; eine spätere Cleanup-/Retention-Policy muss Datenverlust- und Recovery-Anforderungen berücksichtigen.
 
 ### Relation Types
 
@@ -141,25 +155,27 @@ Diese Typen benötigen keine eigenen Tabellen. Die Liste ist offen für weitere 
 
 ## 4. V1.1 – Research Comfort Layer
 
-V1.1 soll kleine, risikoarme Funktionen ergänzen, die mehrere Profile sofort nutzen können.
+V1.1 soll kleine, risikoarme Funktionen ergänzen, die mehrere Profile sofort nutzen können. Einzelne Punkte wurden bereits vorgezogen, weil sie für die V1-Desktop-Nutzbarkeit direkt sinnvoll waren.
 
-### Geplant
+### Geplant / teilweise bereits vorgezogen
 
 - [x] profile-neutrale Definition für Research Question Template
 - [x] profile-neutrale Definition für Research Source Template
 - [x] profile-neutrale Definition für Observation Template
 - [x] profile-neutrale Definition für Hypothesis Template
+- [x] Benutzertemplates projektlokal oder profilweit aus vorhandenen Entries erzeugen
+- [x] allgemeine Templates auch in Spezialprofilen sichtbar/nutzbar halten
 - [ ] kontrollierte Installation/Aktualisierung kanonischer System-Templates in persistenten Workbench-Daten
 - [ ] External Links / References
 - [x] erste generische Relation-UI
 - [x] eingehende und ausgehende Relations in einer gemeinsamen Ansicht
-- [ ] Attachment-Kommentare
+- [x] Attachment-Kommentare
 - [ ] Attachment Templates
 - [ ] Checklists
 - [ ] bessere Suche / Filter UX über den funktionalen V1-Dialog hinaus
 - [ ] erste Quellen-Metadaten ohne vollständige Literaturverwaltung
 
-Die Core-Template-Skelette liegen zunächst als kanonischer Katalog im Application Layer vor. Eine automatische SQLite-Seed-Logik wird bewusst erst eingeführt, wenn Identität, Benutzeranpassungen und Update-/Override-Regeln für System-Templates geklärt sind.
+Die Core-Template-Skelette liegen als kanonischer Katalog im Application Layer vor. Eine automatische SQLite-Seed-Logik wird bewusst erst eingeführt, wenn stabile Identität, Benutzeranpassungen und Update-/Override-Regeln für System-Templates geklärt sind. Die Desktop-UI erzeugt deshalb derzeit bewusst **Benutzertemplates**, statt Core-Definitionen ungefragt in die Datenbank zu kopieren.
 
 ### Nicht Teil von V1.1
 
@@ -301,16 +317,16 @@ Stand 2026-09-13:
 2. [x] Gemeinsamen profile-neutralen Composition Root schaffen, damit spätere Workbench-Hosts keine Core-Verdrahtung kopieren.
 3. [x] `research_question`, `research_source`, `observation`, `hypothesis`, `finding` und `conclusion` als neutrale Core Entry Types und Template-Definitionen ergänzen.
 4. [x] Relation Types zentral definieren und als offenes Vokabular validieren.
-5. [x] Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
+5. [x] Templates, Tags, Attachments, Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
 6. [x] Activity Log in UI sichtbar machen.
 7. [x] Neue V1-Funktionen in fokussierte Dialoge auslagern, statt `MainForm` mit Featurelogik zu überladen.
 8. [x] Semantik und Transaktionsverhalten für automatisches Activity Recording der mutierenden Core-Use-Cases festlegen und implementieren.
 9. [x] Developer Guide und Test Strategy ergänzen.
-10. [ ] V1 internen Nutzertest durchführen und Findings priorisieren.
-11. [ ] Aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
-12. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
-
-Parallel zur V1-Konsolidierung wird die Testlandschaft schrittweise in Domain-, Application- und Infrastructure-Tests aufgeteilt. Der reale End-to-End-Smoke-Test bleibt dabei als breites Recovery-/Composition-Gate bestehen.
+10. [x] strukturierten internen V1-Nutzertest als wiederholbare Checkliste vorbereiten.
+11. [ ] V1-Nutzertest auf realem Windows-Desktop durchführen und Findings priorisieren.
+12. [ ] aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
+13. [ ] Testlandschaft gezielt in Domain-/Application-/Infrastructure-Tests ausbauen, ohne den realen End-to-End-Smoke-Test zu ersetzen.
+14. [ ] erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
 
 ---
 
