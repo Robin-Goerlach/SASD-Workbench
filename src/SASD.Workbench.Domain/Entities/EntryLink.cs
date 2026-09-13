@@ -1,3 +1,5 @@
+using SASD.Workbench.Domain.Metadata;
+
 namespace SASD.Workbench.Domain.Entities;
 
 /// <summary>
@@ -36,7 +38,7 @@ public sealed class EntryLink
         Id = id;
         SourceEntryId = sourceEntryId;
         TargetEntryId = targetEntryId;
-        RelationType = NormalizeRequired(relationType, nameof(relationType), 100);
+        RelationType = EntryRelationTypes.Normalize(relationType);
         Comment = NormalizeOptional(comment);
         CreatedBy = NormalizeOptional(createdBy);
         CreatedAtUtc = EnsureUtc(createdAtUtc);
@@ -45,7 +47,7 @@ public sealed class EntryLink
     public Guid Id { get; private set; }
     public Guid SourceEntryId { get; private set; }
     public Guid TargetEntryId { get; private set; }
-    public string RelationType { get; private set; } = "related_to";
+    public string RelationType { get; private set; } = EntryRelationTypes.RelatedTo;
     public string? Comment { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public string? CreatedBy { get; private set; }
@@ -69,18 +71,6 @@ public sealed class EntryLink
     }
 
     public void Delete() => IsDeleted = true;
-
-    private static string NormalizeRequired(string value, string parameterName, int maxLength)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        var normalized = value.Trim();
-        if (normalized.Length > maxLength)
-        {
-            throw new ArgumentOutOfRangeException(parameterName, $"Value must not exceed {maxLength} characters.");
-        }
-
-        return normalized;
-    }
 
     private static string? NormalizeOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
