@@ -29,7 +29,7 @@ Die Priorität lautet:
 - SQLite-Migrationssystem
 - Projects
 - Entries
-- optimistic concurrency
+- optimistic concurrency foundation
 - Soft Delete / Archive
 - UTC-Zeitstempel
 - minimale Desktop-UI
@@ -69,9 +69,13 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - editierbare Attachment-Kommentare
 - projektlokale und profilweite Benutzertemplates
 - allgemeine Templates bleiben in Spezialprofilen sichtbar und nutzbar
+- durchgängige caller-basierte Optimistic Concurrency für Project-/Entry-Mutationen
+- Application- und SQLite-Regressionsschutz gegen stale/lost updates
 - Developer Guide und dokumentierte Teststrategie
 - Domain-/Application-/Infrastructure-Testprojekte plus breiter Core-Smoke-Test
-- vorbereitete interne V1-Abnahmecheckliste
+- nichtvisuelle WinForms-Host-Tests für Startup-/Datenpfadkonfiguration
+- expliziter isolierter `--data-root` für Abnahme, Experimente und Testdaten
+- vorbereitete interne V1-Abnahmecheckliste mit isoliertem Datenbestand und Zwei-Instanzen-Concurrency-Szenario
 
 Für den internen V1-Einsatz fehlt jetzt vor allem der **reale strukturierte Nutzertest** und die anschließende Konsolidierung seiner Findings. Bis dahin bleibt der Status „prepared for internal acceptance“, nicht „abgenommen“.
 
@@ -101,9 +105,13 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] WinForms-Integration der V1-Kernfunktionen Templates / Tags / Attachments / Search / Collections / Relations / Activity / Export / Backup / Restore
 - [x] Migrationen im realen End-to-End-Smoke-Test wiederholt/idempotent ausführen
 - [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
+- [x] caller-basierte Optimistic Concurrency bis vom Host zum atomaren SQLite-Update
+- [x] stale/lost-update Regressionstests auf Application- und Infrastructure-Ebene
+- [x] expliziter isolierter Desktop-Datenpfad für V1-Abnahme und Testbetrieb
 - [x] Developer Guide
 - [x] Test Strategy
 - [x] geschichtete Domain-/Application-/Infrastructure-Tests als CI-Gates
+- [x] nichtvisuelle WinForms-Host-Tests als CI-Gate
 - [x] interne V1-Abnahmecheckliste vorbereitet
 - [ ] interne V1-Abnahmecheckliste auf realem Windows-Desktop ausgeführt
 - [ ] Findings priorisiert und Critical-/High-Findings geschlossen
@@ -111,6 +119,8 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 Die Activity History bleibt bewusst ein leichtgewichtiges chronologisches Protokoll. Sie ist kein manipulationssicherer regulatorischer Audit Trail. Siehe `docs/adr/ADR-003-transactional-lightweight-activity-history.md`.
 
 Attachments werden im kontrollierten Storage gehalten. Soft Delete entfernt aktuell die aktive Metadatenzuordnung, löscht die physische Datei aber bewusst nicht sofort; eine spätere Cleanup-/Retention-Policy muss Datenverlust- und Recovery-Anforderungen berücksichtigen.
+
+Der isolierte `--data-root` ist eine Host-Startoption und ersetzt kein Backup. Er wählt einen separaten vollständigen Workbench-Zustand, damit destruktive Abnahme- und Recovery-Szenarien nicht gegen den normalen Benutzerbestand laufen.
 
 ### Relation Types
 
@@ -326,9 +336,11 @@ Stand 2026-09-13:
 9. [x] Developer Guide und Test Strategy ergänzen.
 10. [x] strukturierten internen V1-Nutzertest als wiederholbare Checkliste vorbereiten.
 11. [x] Testlandschaft in Domain-/Application-/Infrastructure-Tests ausbauen, ohne den realen End-to-End-Smoke-Test zu ersetzen.
-12. [ ] V1-Nutzertest auf realem Windows-Desktop durchführen und Findings priorisieren.
-13. [ ] aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
-14. [ ] erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
+12. [x] Optimistic Concurrency vom caller-beobachteten Stand bis zum atomaren SQLite-Write schließen und regressionssicher machen.
+13. [x] isolierten Desktop-Datenpfad und nichtvisuelle Host-Tests für sichere V1-Abnahme vorbereiten.
+14. [ ] V1-Nutzertest auf realem Windows-Desktop mit isoliertem Datenbestand durchführen und Findings priorisieren.
+15. [ ] aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
+16. [ ] erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
 
 ---
 
@@ -343,6 +355,7 @@ Vor Implementierung eines neuen Fachfeatures ist zu prüfen:
 - Reicht zunächst ein Entry Type, Template oder Relation Type?
 - Bleiben Export und Backup vollständig?
 - Gibt es einen Test für Migration und Roundtrip?
+- Liegt Host-spezifische Start-/UI-Konfiguration weiterhin außerhalb des Core?
 
 ---
 
@@ -360,6 +373,7 @@ Mindestens erforderlich:
 - Datenexport/Backup nicht gebrochen
 - Restore berücksichtigt
 - schnellster sinnvoller Domain-/Application-/Infrastructure-Regressionstest vorhanden
+- Host-Test vorhanden, falls konkrete Desktop-Start-/Konfigurationslogik betroffen ist
 - CI grün
 - Smoke-/Integrationstest erweitert, wenn der vollständige Workflow betroffen ist
 - Dokumentation aktualisiert
