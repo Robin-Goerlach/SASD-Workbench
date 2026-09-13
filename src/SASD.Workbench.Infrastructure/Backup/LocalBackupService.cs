@@ -177,7 +177,10 @@ public sealed class LocalBackupService : IBackupService
         var builder = new SqliteConnectionStringBuilder
         {
             DataSource = snapshotPath,
-            Mode = SqliteOpenMode.ReadWriteCreate
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            // Snapshot files are immediately validated, archived and deleted. Pooling would retain
+            // an OS file handle after disposal and can therefore block those file operations on Windows.
+            Pooling = false
         };
         await using var destination = new SqliteConnection(builder.ToString());
         await destination.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -190,7 +193,10 @@ public sealed class LocalBackupService : IBackupService
         var builder = new SqliteConnectionStringBuilder
         {
             DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly
+            Mode = SqliteOpenMode.ReadOnly,
+            // Validation is performed on transient snapshot/staging databases. Do not place those
+            // connections in the process-wide pool because restore must be able to move the files.
+            Pooling = false
         };
         await using var connection = new SqliteConnection(builder.ToString());
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
