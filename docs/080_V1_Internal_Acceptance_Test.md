@@ -17,13 +17,43 @@ Schwerpunkte:
 - Activity History ist nachvollziehbar,
 - Export ist außerhalb der Anwendung lesbar,
 - Backup/Restore ist für den Anwender kontrollierbar,
+- parallele/stale Editoren überschreiben keine neueren Daten,
 - Fehler und Bestätigungen sind verständlich.
 
-## 2. Sicherheitsregel
+## 2. Sicherheitsregel und isolierter Datenbestand
 
 Für diesen Test ausschließlich einen **separaten Test-Datenbestand** verwenden.
 
-Nicht auf einem produktiv genutzten Workbench-Datenbestand testen, insbesondere nicht beim Restore-Szenario.
+Nicht auf einem normal oder produktiv genutzten Workbench-Datenbestand testen, insbesondere nicht beim Restore-Szenario.
+
+### Empfohlener Start aus dem Repository
+
+In PowerShell einen eindeutigen Test-Root erzeugen:
+
+```powershell
+$acceptanceRoot = Join-Path $env:TEMP ("SASD-Workbench-V1-Acceptance-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$acceptanceRoot
+```
+
+Workbench anschließend **mit diesem expliziten Root** starten:
+
+```powershell
+dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj -- --data-root "$acceptanceRoot"
+```
+
+Der Desktop zeigt unten den tatsächlich verwendeten Datenbankpfad. Vor dem ersten Testschritt prüfen:
+
+```text
+Data: <acceptanceRoot>\workbench.db
+```
+
+Wenn dort nicht der beabsichtigte isolierte Pfad steht, den Test **nicht** fortsetzen.
+
+Für Neustarts innerhalb desselben Testlaufs immer denselben `$acceptanceRoot` verwenden. Wird eine neue PowerShell geöffnet, den ausgegebenen Root-Pfad vorher notieren und erneut als `--data-root` übergeben.
+
+Für den Zwei-Instanzen-Test AT-013 beide Prozesse mit **demselben isolierten Acceptance Root** starten. Das simuliert zwei Editoren auf demselben Datenbestand, ohne normale Workbench-Daten zu berühren.
+
+Die Startoption ist absichtlich streng: unbekannte Optionen, ein fehlender `--data-root`-Wert oder ein doppelter `--data-root` führen zum Startfehler statt zu einem stillen Fallback auf den normalen Benutzerpfad.
 
 Vor dem Test dokumentieren:
 
@@ -32,7 +62,7 @@ Testdatum:
 Commit / Version:
 Windows-Version:
 .NET-Version:
-Workbench-Datenpfad:
+Workbench-Datenpfad / acceptanceRoot:
 Tester:
 ```
 
@@ -62,26 +92,29 @@ Screenshot/Log optional:
 
 ## 4. Start und leerer Datenbestand
 
-### AT-001 – Erststart
+### AT-001 – Erststart im isolierten Root
 
-1. Test-Datenbestand leer bereitstellen.
-2. Workbench starten.
+1. Einen neuen eindeutigen `$acceptanceRoot` wie oben beschrieben verwenden.
+2. Workbench mit `--data-root "$acceptanceRoot"` starten.
+3. den unten angezeigten Datenbankpfad kontrollieren.
 
 Erwartung:
 
 - Anwendung startet ohne Ausnahme.
 - leere Projekt-/Entry-Ansicht ist verständlich.
-- Datenpfad wird sichtbar bzw. nachvollziehbar angezeigt.
+- der angezeigte Datenbankpfad liegt unter dem gewählten `$acceptanceRoot`.
 - keine technischen SQLite-Fehler werden gezeigt.
+- der normale Workbench-Datenpfad wird für diesen Test nicht verwendet.
 
-### AT-002 – Neustart
+### AT-002 – Neustart mit demselben isolierten Root
 
 1. Anwendung schließen.
-2. erneut starten.
+2. mit demselben `--data-root` erneut starten.
 
 Erwartung:
 
 - Start weiterhin fehlerfrei.
+- derselbe Datenbankpfad wird angezeigt.
 - keine doppelten Migrationen oder Startartefakte sichtbar.
 
 ## 5. Projects und Entries
@@ -121,19 +154,20 @@ Erwartung:
 ### AT-012 – Persistenz nach Neustart
 
 1. Anwendung schließen.
-2. erneut starten.
+2. mit demselben `--data-root` erneut starten.
 3. Projekt und Entry auswählen.
 
 Erwartung:
 
 - Projekt und Entry vollständig vorhanden.
 - Text `BlueOrchid-4711` unverändert vorhanden.
+- weiterhin derselbe isolierte Datenpfad aktiv.
 
 ### AT-013 – stale Editor darf neueren Stand nicht überschreiben
 
-Dieser Test verwendet bewusst zwei gleichzeitig gestartete Workbench-Instanzen mit demselben **Test-Datenbestand**.
+Dieser Test verwendet bewusst zwei gleichzeitig gestartete Workbench-Instanzen mit demselben **isolierten Test-Datenbestand**.
 
-1. Workbench A und Workbench B starten.
+1. Workbench A und Workbench B jeweils mit demselben `--data-root "$acceptanceRoot"` starten.
 2. In beiden Instanzen denselben `First acceptance note` auswählen, sodass beide denselben Ausgangsstand geladen haben.
 3. In Workbench A Titel oder Markdown deutlich ändern und speichern.
 4. In Workbench B **ohne vorherigen Reload** einen anderen Text eingeben und speichern.
@@ -431,6 +465,8 @@ Erwartung:
 
 ## 14. Backup und Restore
 
+Die folgenden Tests bleiben im isolierten `$acceptanceRoot`. Das erzeugte Backup ist ein Testbackup dieses isolierten Zustands.
+
 ### AT-100 – Full Backup
 
 Backup über die Desktop-Funktion erzeugen.
@@ -467,15 +503,17 @@ Erwartung:
 - Änderungen aus AT-101 sind nicht mehr im restaurierten Live-Zustand.
 - Attachment samt Kommentar/Datei entspricht wieder dem Backup-Zeitpunkt.
 - Activity History entspricht ebenfalls dem Backup-Zeitpunkt.
+- der aktive Datenbankpfad bleibt unter `$acceptanceRoot`.
 
 ### AT-103 – Neustart nach Restore
 
-Anwendung schließen und erneut starten.
+Anwendung schließen und mit demselben `--data-root` erneut starten.
 
 Erwartung:
 
 - restaurierter Zustand bleibt stabil.
 - keine Migration-/SQLite-Fehler.
+- isolierter Datenpfad bleibt aktiv.
 
 ## 15. Fehler- und UX-Prüfung
 
@@ -507,6 +545,7 @@ Bei normaler Desktop-Auflösung prüfen:
 - Toolstrip auch bei kleinerem Fenster sinnvoll nutzbar?
 - Dialoge verständlich beschriftet?
 - kritische Aktionen ausreichend deutlich?
+- Datenpfad weiterhin ausreichend sichtbar, um isolierten/normalen Zustand zu unterscheiden?
 
 ## 16. Explorative Phase
 
@@ -527,6 +566,7 @@ Jede Überraschung als Finding erfassen, auch wenn sie kein technischer Fehler i
 V1 kann als intern belastbar betrachtet werden, wenn:
 
 - kein Critical-/High-Finding offen ist,
+- der komplette Test auf einem explizit isolierten Datenbestand durchgeführt wurde,
 - Backup/Restore einschließlich Neustart bestanden hat,
 - Datenpersistenz nach Neustart bestanden hat,
 - stale Editoren keinen neueren Stand still überschreiben,

@@ -41,6 +41,7 @@ tests/
   SASD.Workbench.Domain.Tests/
   SASD.Workbench.Application.Tests/
   SASD.Workbench.Infrastructure.Tests/
+  SASD.Workbench.WinForms.Tests/
   SASD.Workbench.SmokeTests/
 
 docs/
@@ -115,6 +116,8 @@ Die UI darf nicht:
 - eigene Kopien der Core-Validierung pflegen,
 - Activity-Einträge als Ersatz für die zentrale Persistenzlogik erzeugen.
 
+Host-spezifische Startkonfiguration wie `--data-root` bleibt ebenfalls im WinForms-Projekt. Der gemeinsame Core darf nicht davon abhängig werden, ob ein Host Kommandozeile, Konfigurationsdatei, UI-Einstellungen oder einen anderen Mechanismus verwendet.
+
 ## 4. Lokale Entwicklungsumgebung
 
 Voraussetzung ist ein kompatibles .NET-10-SDK entsprechend `global.json`.
@@ -129,16 +132,33 @@ dotnet build SASD-Workbench.slnx --configuration Release --no-restore
 dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.WinForms.Tests/SASD.Workbench.WinForms.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
-Der Release-Build ist maßgeblich, weil Warnungen als Fehler behandelt werden. Die Tests werden bewusst in Schichten ausgeführt: reine Regeln zuerst, reale SQLite-/Dateisystemintegration danach und der breite End-to-End-Smoke-Test zuletzt.
+Der Release-Build ist maßgeblich, weil Warnungen als Fehler behandelt werden. Die Tests werden bewusst in Schichten ausgeführt: reine Regeln zuerst, reale SQLite-/Dateisystemintegration danach, nichtvisuelle Host-Konfiguration und der breite End-to-End-Smoke-Test zuletzt.
 
-Zum Starten des Desktop-Hosts:
+### Desktop mit normalem Benutzerbestand
 
 ```powershell
 dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj
 ```
+
+### Desktop mit isoliertem Datenbestand
+
+Für Abnahme, Experimente oder reproduzierbare Testfälle:
+
+```powershell
+dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj -- --data-root "C:\Temp\SASD-Workbench-Test"
+```
+
+Die Alternative `--data-root=<path>` ist ebenfalls gültig.
+
+Der Parser wertet die Option **vor** Verzeichnisanlage, Migration und DI-Komposition aus. Unbekannte oder fehlerhafte Optionen führen zum Startfehler. Diese Fail-Closed-Regel verhindert, dass ein Tippfehler in einem Testbefehl unbeabsichtigt den normalen Workbench-Datenbestand initialisiert oder verändert.
+
+Die konkrete Datenbankdatei ist im Statusbereich des Desktop-Hosts sichtbar. Bei destruktiven Abnahmefällen wie Restore zuerst den angezeigten Pfad prüfen.
+
+`SASD.Workbench.WinForms.Tests` testet ausschließlich nichtvisuelle Host-Konfiguration wie diese Argumentauswertung. Es handelt sich **nicht** um WinForms-UI-Automation.
 
 ## 5. Gemeinsamen Core korrekt registrieren
 
@@ -161,6 +181,8 @@ Profil-/Host-spezifische Services
         +
 Profil-/Host-spezifische UI
 ```
+
+Die Auswahl des Daten-Roots erfolgt **vor** `AddSasdWorkbenchCore(...)`. Der Host erzeugt ein `WorkbenchDataPaths` für den gewünschten Root und übergibt genau diese Pfade an den gemeinsamen Core.
 
 Siehe `docs/adr/ADR-001-shared-core-composition.md`.
 
@@ -263,6 +285,8 @@ Bevorzugt:
 
 `MainForm` soll primär Navigation, Selektion und Host-Koordination übernehmen.
 
+Startup-Parsing, Fenster-/Dialognavigation und andere rein desktopbezogene Entscheidungen bleiben im WinForms-Host. Profile oder spätere Hosts dürfen andere Oberflächen verwenden, ohne den gemeinsamen Core umbauen zu müssen.
+
 ## 12. Fehlerbehandlung
 
 Grundsätze:
@@ -302,6 +326,8 @@ Restore arbeitet über validiertes Staging und schützt gegen Path Traversal. Ä
 
 Wenn nicht, ist die Core-Funktion nicht fertig.
 
+Ein isolierter `--data-root` ersetzt **kein** Backup. Er wählt lediglich einen anderen vollständigen Workbench-Zustand für den Prozess. Backup/Restore muss innerhalb dieses Zustands weiterhin mit der normalen Full-Backup-Funktion geprüft werden.
+
 ## 14. Tests vor Merge
 
 Mindestens dieselben Gates wie in CI ausführen:
@@ -313,6 +339,7 @@ dotnet build SASD-Workbench.slnx --configuration Release --no-restore
 dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.WinForms.Tests/SASD.Workbench.WinForms.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
@@ -320,6 +347,7 @@ Für neue Core-Funktionen gilt zusätzlich:
 
 - reine Domain-/Use-Case-Regel möglichst im schnellsten passenden Testprojekt absichern,
 - SQLite-/File-I/O-Vertrag als Infrastructure-Test absichern,
+- host-spezifische nichtvisuelle Konfiguration im Host-Testprojekt absichern,
 - breiten Smoke-Test nur dort erweitern, wo die vollständige Composition/Recovery-Kette relevant ist,
 - Migration/Roundtrip prüfen,
 - Fehlerpfad prüfen,
@@ -343,7 +371,7 @@ Ein PR soll erklären:
 - Tests/CI,
 - bekannte Grenzen.
 
-Nicht mergen, solange Release-Build, geschichtete Tests oder der V1-Core-Smoke-Test fehlschlagen.
+Nicht mergen, solange Release-Build, geschichtete Tests, Host-Tests oder der V1-Core-Smoke-Test fehlschlagen.
 
 ## 16. Definition of Done für gemeinsame Core-Funktionen
 

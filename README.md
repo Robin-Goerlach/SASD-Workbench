@@ -51,7 +51,8 @@ Features discovered in specialized projects such as Health Research or Biblical 
 The current codebase contains the common local V1 backend and desktop integration for:
 
 - local SQLite-based project and entry management
-- optimistic concurrency and soft delete/archive foundations
+- end-to-end optimistic concurrency for caller-observed Project/Entry versions
+- soft delete/archive foundations
 - generic entry types and status fields
 - reusable templates, including project-local and profile-wide user templates
 - shared `general` templates that remain visible/usable from future specialist profiles
@@ -65,14 +66,57 @@ The current codebase contains the common local V1 backend and desktop integratio
 - automatic lightweight activity history for persisted Core mutations
 - focused WinForms dialogs for templates, tags, attachments, search, collections, relations and activity
 - desktop commands for export, backup and restore
+- explicit isolated desktop data roots for acceptance tests and experiments
 
 For SQLite-backed mutations, the primary data change and its automatic activity record share one database transaction. Idempotent no-op assignments do not create duplicate history. This remains a lightweight chronological history, **not** a tamper-evident regulatory audit trail. Attachment file bytes remain outside the SQLite transaction; their metadata and activity record are transactional while the Application service uses compensating cleanup if a new file cannot be persisted successfully.
+
+Project and Entry saves use two-stage optimistic concurrency. The Application service compares the version observed by the caller with the currently persisted entity; SQLite then repeats the version predicate atomically during the update to close the remaining race. A stale desktop editor is rejected instead of silently overwriting a newer save.
 
 The attachment desktop workflow deliberately does not open stored files directly yet. This keeps controlled-path resolution out of WinForms until a reusable and security-reviewed open/reveal capability exists in the common Application/Infrastructure boundary.
 
 The Core also contains stable neutral keys and reusable template definitions for `research_question`, `research_source`, `observation`, `hypothesis`, `finding` and `conclusion`. These are generic building blocks rather than specialist domain models. Canonical Core template definitions are still definitions rather than automatically seeded database rows; user templates can already be created from existing entries through the desktop workflow.
 
-GitHub Actions builds the complete solution with warnings treated as errors and runs an end-to-end Core smoke test against real SQLite persistence, migrations, controlled attachments, template compatibility across profiles, transactional activity history, relations, search, export and backup/restore.
+GitHub Actions builds the complete solution with warnings treated as errors and runs layered Domain, Application, Infrastructure and non-visual WinForms-host tests before the end-to-end Core smoke test against real SQLite persistence, migrations, controlled attachments, template compatibility across profiles, transactional activity history, relations, search, export and backup/restore.
+
+---
+
+## Running the Desktop
+
+Normal start from the repository root:
+
+```powershell
+dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj
+```
+
+Without additional options, the WinForms host uses the normal per-user Workbench data directory under Windows LocalAppData.
+
+### Isolated data root
+
+For acceptance tests, experiments or disposable test data, start the same application with an explicit data root:
+
+```powershell
+dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj -- --data-root "C:\Temp\SASD-Workbench-Acceptance"
+```
+
+The equivalent compact syntax is:
+
+```powershell
+dotnet run --project src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj -- --data-root="C:\Temp\SASD-Workbench-Acceptance"
+```
+
+The status line in the desktop shows the actual database path. Before performing a destructive acceptance scenario such as Restore, verify that it points to the intended isolated directory.
+
+Startup option parsing is deliberately strict. Unknown options, duplicate `--data-root` switches or a missing path fail startup instead of silently falling back to the normal user data directory. This prevents a typo in an acceptance command from accidentally operating on real Workbench data.
+
+Supported help switches:
+
+```text
+--help
+-h
+/?
+```
+
+The isolated root is a **separate Workbench instance state**, not a backup. Backup/restore tests should still use the application's normal full-backup workflow inside that isolated test state.
 
 ---
 
@@ -110,6 +154,10 @@ sasd-workbench/
     SASD.Workbench.Infrastructure/
     SASD.Workbench.WinForms/
   tests/
+    SASD.Workbench.Domain.Tests/
+    SASD.Workbench.Application.Tests/
+    SASD.Workbench.Infrastructure.Tests/
+    SASD.Workbench.WinForms.Tests/
     SASD.Workbench.SmokeTests/
 ```
 
@@ -127,6 +175,8 @@ export and backup/restore and is wired by the host composition root.
 ```
 
 `AddSasdWorkbenchCore(...)` is the canonical profile-neutral dependency-injection registration for current and future Workbench hosts. A specialist host selects its data root, runs migrations, reuses the common Core registration and adds only its own profile/UI modules.
+
+Desktop command-line parsing deliberately remains in the WinForms host. `WorkbenchDataPaths` and the shared Core do not depend on command-line semantics, so later hosts can choose configuration appropriate to their own environment.
 
 The Domain and Application layers remain independent of Windows Forms and profile-specific UI decisions. `MainForm` is intentionally a coordinator: substantial Core tools live in focused dialogs rather than accumulating persistence or feature rules in one form.
 
