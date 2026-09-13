@@ -6,9 +6,9 @@
 
 ## 1. Ziel
 
-Die Teststrategie soll verhindern, dass die gemeinsame Workbench-Codebasis zwar kompiliert, aber bei Domain-Regeln, Use Cases, Migration, Persistenz, Recovery oder Wiederverwendung auseinanderläuft.
+Die Teststrategie soll verhindern, dass die gemeinsame Workbench-Codebasis zwar kompiliert, aber bei Domain-Regeln, Use Cases, Migration, Persistenz, Host-Konfiguration, Recovery oder Wiederverwendung auseinanderläuft.
 
-Für den Core sind insbesondere wichtig:
+Für den Core und den ersten Desktop-Host sind insbesondere wichtig:
 
 - schnelle Domain-/Application-Regeltests,
 - reale SQLite-Roundtrips,
@@ -18,17 +18,19 @@ Für den Core sind insbesondere wichtig:
 - Backup/Restore,
 - transaktionale Activity History,
 - profile-neutrale Domain-/Application-Regeln,
+- sichere Host-Konfiguration vor Migration/DI,
 - identische Dependency-Injection-Konfiguration in Host und Integrationstests.
 
 ## 2. Aktueller Teststand
 
-Die Testlandschaft ist in vier ausführbare Projekte aufgeteilt:
+Die Testlandschaft ist in fünf ausführbare Projekte aufgeteilt:
 
 ```text
 tests/
   SASD.Workbench.Domain.Tests/
   SASD.Workbench.Application.Tests/
   SASD.Workbench.Infrastructure.Tests/
+  SASD.Workbench.WinForms.Tests/
   SASD.Workbench.SmokeTests/
 ```
 
@@ -43,6 +45,22 @@ Schnelle xUnit-v3-Tests mit kleinen In-Memory-Fakes. Sie prüfen Use-Case-Regeln
 ### Infrastructure Tests
 
 xUnit-v3-Integrationstests gegen echte temporäre SQLite-Datenbanken und echtes temporäres File-I/O. Sie verwenden die produktive `AddSasdWorkbenchCore(...)` Registrierung und konzentrieren sich auf technische Verträge und Fehlerpfade.
+
+### WinForms Host Tests
+
+Nichtvisuelle xUnit-v3-Tests für Host-Konfiguration. Sie starten **keine** Form und sind keine UI-Automation.
+
+Aktuell sichern sie die Startup-Argumente ab:
+
+- normaler Start ohne Override,
+- beide `--data-root`-Schreibweisen,
+- Pfade mit Leerzeichen,
+- fehlende/doppelte Werte,
+- unbekannte Optionen als Fail-Closed-Fehler,
+- Help-Switches,
+- Pfadnormalisierung ohne vorzeitige Datenbankanlage.
+
+Diese Schicht verhindert insbesondere, dass ein fehlerhafter Acceptance-/Testbefehl still auf den normalen Benutzer-Datenpfad zurückfällt.
 
 ### Smoke Test
 
@@ -119,7 +137,19 @@ Weitere Zieltests:
 - Restore und Safety Backup,
 - Schutz gegen Path Traversal als gezielter Regressionstest.
 
-### Ebene D – End-to-End Smoke Test
+### Ebene D – Host-Konfigurationstests
+
+Für nichtvisuelle Entscheidungen des konkreten Desktop-Hosts, die weder Domain noch Core-Infrastructure sind.
+
+Aktuelle Beispiele:
+
+- strikte Kommandozeilen-Auswertung,
+- expliziter isolierter Daten-Root,
+- kein stiller Fallback bei fehlerhaftem Switch.
+
+Ziel: Host-Sicherheits- und Startverhalten testen, ohne WinForms-Steuerelemente oder Layoutdetails zu automatisieren.
+
+### Ebene E – End-to-End Smoke Test
 
 Wenige breite Kernabläufe durch echte Core-Komposition.
 
@@ -217,9 +247,10 @@ Beispiele:
 - Restore-Archiv enthält unerwartete Pfade,
 - Caller-Version ist bereits stale,
 - Datensatz ändert sich zwischen Application-Read und SQLite-UPDATE,
-- referenziertes Entry/Project existiert nicht.
+- referenziertes Entry/Project existiert nicht,
+- Acceptance-Startoption ist falsch geschrieben oder unvollständig.
 
-Erwartung: Der resultierende Zustand muss dokumentiert und kontrolliert sein; keine stillen Teil-Erfolge und keine Lost Updates.
+Erwartung: Der resultierende Zustand muss dokumentiert und kontrolliert sein; keine stillen Teil-Erfolge, keine Lost Updates und kein stiller Wechsel auf einen anderen Datenbestand.
 
 Der gezielte Attachment-Integrationstest erzwingt deshalb einen Fehler **nach** der Dateikopie und nach dem Metadata-INSERT beim Activity-Write. Erwartet werden SQLite-Rollback und kompensierende Löschung der bereits kopierten Datei.
 
@@ -227,6 +258,8 @@ Optimistic Concurrency wird bewusst auf zwei Ebenen getestet:
 
 1. Application Tests beweisen, dass eine bereits beim Use-Case-Start stale Caller-Version die aktuelle Entity nicht verändert.
 2. Infrastructure Tests beweisen mit zwei getrennt geladenen Version-1-Kopien, dass ein zweiter Writer auch dann atomar scheitert, wenn der Konflikt erst beim bedingten SQLite-UPDATE sichtbar wird.
+
+Host-Konfiguration folgt demselben Fail-Closed-Prinzip: Ein ungültiger `--data-root`-Aufruf muss fehlschlagen, bevor der normale Datenpfad initialisiert, migriert oder benutzt wird.
 
 ## 6. Deterministische Zeit
 
@@ -252,6 +285,8 @@ Regeln:
 - Cleanup in `Dispose`/`finally`,
 - SQLite Connection Pools vor Windows-Datei-Cleanup leeren,
 - Test darf bei parallelem Lauf keinen festen gemeinsamen DB-Dateinamen außerhalb seines Root verwenden.
+
+Der manuelle V1-Acceptance-Test verwendet analog einen expliziten `--data-root` in einem eindeutig benannten Testordner. Siehe `080_V1_Internal_Acceptance_Test.md`.
 
 ## 8. Migrationstests
 
@@ -279,9 +314,11 @@ Fragen:
 
 Eine Funktion, deren persistenter Zustand nicht vollständig recoverbar ist, gilt nicht als Core-fertig.
 
-## 10. UI-Tests
+## 10. UI-Tests und Host-Tests
 
-V1 verlässt sich für WinForms weiterhin auf Build plus strukturierte manuelle Desktop-Prüfung; es gibt noch keine automatisierte WinForms-UI-Test-Suite.
+V1 verlässt sich für die **visuelle WinForms-Oberfläche** weiterhin auf Build plus strukturierte manuelle Desktop-Prüfung; es gibt noch keine automatisierte WinForms-UI-Test-Suite.
+
+`SASD.Workbench.WinForms.Tests` ändert diese Aussage nicht. Dieses Projekt testet nur nichtvisuelle Host-Logik wie Startup-Argumente und Datenpfad-Auswahl. Es klickt keine Controls und prüft kein Layout.
 
 Die aktuelle Abnahmecheckliste liegt in:
 
@@ -291,7 +328,9 @@ docs/080_V1_Internal_Acceptance_Test.md
 
 Sie umfasst insbesondere:
 
+- isolierten Test-Datenpfad,
 - Project/Entry,
+- stale Editor / Concurrency,
 - Templates,
 - Tags,
 - Attachments,
@@ -316,10 +355,11 @@ dotnet build SASD-Workbench.slnx --configuration Release --no-restore
 dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.WinForms.Tests/SASD.Workbench.WinForms.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
-Ein PR mit fehlgeschlagenem Release-Build, Layer-Test oder Smoke-Test wird nicht gemergt.
+Ein PR mit fehlgeschlagenem Release-Build, Layer-/Host-Test oder Smoke-Test wird nicht gemergt.
 
 ## 12. Regression-Regel
 
@@ -334,13 +374,14 @@ Beispiele aus dem bisherigen Projekt:
 - Cross-Project-Relation → Application Test,
 - stale Editor-/Caller-Version → Application Optimistic-Concurrency Test,
 - konkurrierende SQLite-Writer aus derselben Version → Infrastructure Optimistic-Concurrency Test,
+- fehlerhafte `--data-root`-Startoption → WinForms Host Test,
 - Entry-Versionierung → Domain Test.
 
 Der breite Smoke-Test bleibt wichtig, soll aber nicht zur einzigen Stelle werden, an der jede kleine Regel getestet wird.
 
 ## 13. Definition of Done aus Testsicht
 
-Eine persistente Core-Funktion gilt als testseitig fertig, wenn:
+Eine persistente Core- oder Host-Funktion gilt als testseitig fertig, wenn:
 
 - die reine Regel auf der schnellsten passenden Ebene abgesichert ist,
 - mindestens der relevante reale Roundtrip geprüft ist,
@@ -348,5 +389,6 @@ Eine persistente Core-Funktion gilt als testseitig fertig, wenn:
 - Migrationen berücksichtigt wurden,
 - Activity History konsistent bleibt,
 - Backup/Restore konsistent bleibt,
+- host-spezifische Datenpfad-/Startlogik nicht auf normalen Datenbestand zurückfallen kann,
 - Release-Build ohne Warnungen erfolgreich ist,
 - CI grün ist.
