@@ -6,6 +6,9 @@
     <Project Path="src/SASD.Workbench.WinForms/SASD.Workbench.WinForms.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj" />
+    <Project Path="tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj" />
+    <Project Path="tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj" />
     <Project Path="tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj" />
   </Folder>
 </Solution>
