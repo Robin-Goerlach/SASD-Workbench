@@ -15,6 +15,7 @@ public sealed class EntryLinkServiceTests
     [Fact]
     public async Task CreateAsync_SameProject_PersistsNormalizedRelation()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var entries = new InMemoryEntryRepository();
         var links = new InMemoryEntryLinkRepository();
         var projectId = Guid.NewGuid();
@@ -24,7 +25,13 @@ public sealed class EntryLinkServiceTests
         entries.Seed(target);
         var service = new EntryLinkService(links, entries, new TestClock(Now));
 
-        var link = await service.CreateAsync(source.Id, target.Id, " Custom_Relation ", "  Evidence  ", "tester");
+        var link = await service.CreateAsync(
+            source.Id,
+            target.Id,
+            " Custom_Relation ",
+            "  Evidence  ",
+            "tester",
+            cancellationToken);
 
         Assert.Equal(source.Id, link.SourceEntryId);
         Assert.Equal(target.Id, link.TargetEntryId);
@@ -38,6 +45,7 @@ public sealed class EntryLinkServiceTests
     [Fact]
     public async Task CreateAsync_CrossProject_RejectsWithoutWritingLink()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var entries = new InMemoryEntryRepository();
         var links = new InMemoryEntryLinkRepository();
         var source = CreateEntry(Guid.NewGuid(), "Source");
@@ -47,7 +55,7 @@ public sealed class EntryLinkServiceTests
         var service = new EntryLinkService(links, entries, new TestClock(Now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.CreateAsync(source.Id, target.Id, EntryRelationTypes.RelatedTo));
+            () => service.CreateAsync(source.Id, target.Id, EntryRelationTypes.RelatedTo, cancellationToken: cancellationToken));
 
         Assert.True(exception.Message.Contains("same project", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(links.All);
@@ -56,6 +64,7 @@ public sealed class EntryLinkServiceTests
     [Fact]
     public async Task CreateAsync_DeletedEntry_RejectsWithoutWritingLink()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var entries = new InMemoryEntryRepository();
         var links = new InMemoryEntryLinkRepository();
         var projectId = Guid.NewGuid();
@@ -67,13 +76,14 @@ public sealed class EntryLinkServiceTests
         var service = new EntryLinkService(links, entries, new TestClock(Now));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.CreateAsync(source.Id, target.Id, EntryRelationTypes.Supports));
+            () => service.CreateAsync(source.Id, target.Id, EntryRelationTypes.Supports, cancellationToken: cancellationToken));
         Assert.Empty(links.All);
     }
 
     [Fact]
     public async Task CreateAsync_MissingEntry_RejectsWithoutWritingLink()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var entries = new InMemoryEntryRepository();
         var links = new InMemoryEntryLinkRepository();
         var source = CreateEntry(Guid.NewGuid(), "Source");
@@ -81,13 +91,14 @@ public sealed class EntryLinkServiceTests
         var service = new EntryLinkService(links, entries, new TestClock(Now));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.CreateAsync(source.Id, Guid.NewGuid(), EntryRelationTypes.References));
+            () => service.CreateAsync(source.Id, Guid.NewGuid(), EntryRelationTypes.References, cancellationToken: cancellationToken));
         Assert.Empty(links.All);
     }
 
     [Fact]
     public async Task DeleteAsync_MarksLinkDeleted_AndSecondDeleteIsNoOp()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var entries = new InMemoryEntryRepository();
         var links = new CountingEntryLinkRepository();
         var projectId = Guid.NewGuid();
@@ -96,10 +107,14 @@ public sealed class EntryLinkServiceTests
         entries.Seed(source);
         entries.Seed(target);
         var service = new EntryLinkService(links, entries, new TestClock(Now));
-        var link = await service.CreateAsync(source.Id, target.Id, EntryRelationTypes.Supports);
+        var link = await service.CreateAsync(
+            source.Id,
+            target.Id,
+            EntryRelationTypes.Supports,
+            cancellationToken: cancellationToken);
 
-        await service.DeleteAsync(link.Id);
-        await service.DeleteAsync(link.Id);
+        await service.DeleteAsync(link.Id, cancellationToken);
+        await service.DeleteAsync(link.Id, cancellationToken);
 
         Assert.True(link.IsDeleted);
         Assert.Equal(1, links.UpdateCount);
