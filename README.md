@@ -60,13 +60,15 @@ The current codebase contains the common local V1 backend and the first usable d
 - title/content search plus project/type/status/collection/tag filters in the application layer
 - portable Markdown project export with copied attachments
 - full validated backup/restore with SQLite snapshots and pre-restore safety backups
-- lightweight activity history
+- automatic lightweight activity history for persisted Core mutations
 - focused WinForms dialogs for search, collections, relations and activity
 - desktop commands for export, backup and restore
 
+For SQLite-backed mutations, the primary data change and its automatic activity record share one database transaction. Idempotent no-op assignments do not create duplicate history. This remains a lightweight chronological history, **not** a tamper-evident regulatory audit trail. Attachment file bytes remain outside the SQLite transaction; their metadata and activity record are transactional while the Application service uses compensating cleanup if a new file cannot be persisted successfully.
+
 The Core also contains stable neutral keys and reusable template definitions for `research_question`, `research_source`, `observation`, `hypothesis`, `finding` and `conclusion`. These are generic building blocks rather than specialist domain models.
 
-GitHub Actions builds the complete solution with warnings treated as errors and runs an end-to-end Core smoke test against real SQLite persistence, migrations, controlled attachments, relations, search, export and backup/restore.
+GitHub Actions builds the complete solution with warnings treated as errors and runs an end-to-end Core smoke test against real SQLite persistence, migrations, controlled attachments, transactional activity history, relations, search, export and backup/restore.
 
 ---
 
@@ -154,8 +156,11 @@ Core project documentation:
 - [040 – Database Design](docs/040_Database_Design.md)
 - [045 – Cross-Cutting Features](docs/045_Cross_Cutting_Features.md)
 - [050 – Development Roadmap](docs/050_Development_Roadmap.md)
+- [060 – Developer Guide](docs/060_Developer_Guide.md)
+- [070 – Test Strategy](docs/070_Test_Strategy.md)
 - [ADR-001 – Shared Core Composition](docs/adr/ADR-001-shared-core-composition.md)
 - [ADR-002 – Open Core Vocabulary](docs/adr/ADR-002-open-core-vocabulary.md)
+- [ADR-003 – Transactional Lightweight Activity History](docs/adr/ADR-003-transactional-lightweight-activity-history.md)
 - [CHANGELOG](CHANGELOG.md)
 - [Agent / repository instructions](AGENTS.md)
 
