@@ -390,10 +390,22 @@ public sealed class MainForm : Form
             await ReloadEntriesAsync(saved.ProjectId, saved.Id).ConfigureAwait(true);
             SetStatus($"Entry saved at {saved.UpdatedAtUtc.ToLocalTime():G}.");
         }
+        catch (SASD.Workbench.Application.Exceptions.OptimisticConcurrencyException ex)
+        {
+            // Do not reload the Entry here. A reload would destroy exactly the unsaved editor text the
+            // concurrency guard protected. The user must first decide what to preserve/merge, then
+            // consciously reload the newer persisted state.
+            var conflict = ConcurrencyConflictPresentation.ForEntry(ex);
+            SetStatus(conflict.Status);
+            MessageBox.Show(
+                this,
+                conflict.Message,
+                conflict.Caption,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
         catch (Exception ex)
         {
-            // A concurrency conflict intentionally leaves the editor untouched so the user can copy
-            // or compare their unsaved text before reloading the newer persisted state.
             ShowError("The entry could not be saved.", ex);
         }
     }
