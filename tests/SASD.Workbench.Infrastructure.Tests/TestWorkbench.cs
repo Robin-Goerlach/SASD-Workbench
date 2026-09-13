@@ -36,7 +36,7 @@ internal sealed class TestWorkbench : IDisposable
     public T GetRequiredService<T>() where T : notnull
         => Services.GetRequiredService<T>();
 
-    public static async Task<TestWorkbench> CreateAsync()
+    public static async Task<TestWorkbench> CreateAsync(CancellationToken cancellationToken)
     {
         var root = Path.Combine(
             Path.GetTempPath(),
@@ -58,7 +58,7 @@ internal sealed class TestWorkbench : IDisposable
         try
         {
             var migrator = provider.GetRequiredService<DatabaseMigrator>();
-            await migrator.MigrateAsync().ConfigureAwait(false);
+            await migrator.MigrateAsync(cancellationToken).ConfigureAwait(false);
             return new TestWorkbench(root, paths, provider, clock);
         }
         catch
