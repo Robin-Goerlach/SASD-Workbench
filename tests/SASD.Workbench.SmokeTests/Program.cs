@@ -1,14 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Models;
 using SASD.Workbench.Application.Services;
-using SASD.Workbench.Infrastructure.Backup;
 using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
-using SASD.Workbench.Infrastructure.Export;
-using SASD.Workbench.Infrastructure.FileStorage;
-using SASD.Workbench.Infrastructure.Repositories;
+using SASD.Workbench.Infrastructure.DependencyInjection;
 
 namespace SASD.Workbench.SmokeTests;
 
@@ -24,40 +22,39 @@ internal static class Program
             paths.EnsureDirectories();
             Assert(Directory.Exists(paths.AttachmentsDirectory), "Attachments directory was not created.");
 
-            var connections = new SqliteConnectionFactory(paths.DatabasePath);
-            var migrator = new DatabaseMigrator(connections);
-            await migrator.MigrateAsync();
-            await migrator.MigrateAsync();
-
-            var projectRepository = new SqliteProjectRepository(connections);
-            var entryRepository = new SqliteEntryRepository(connections);
-            var templateRepository = new SqliteTemplateRepository(connections);
-            var tagRepository = new SqliteTagRepository(connections);
-            var attachmentRepository = new SqliteAttachmentRepository(connections);
-            var collectionRepository = new SqliteCollectionRepository(connections);
-            var linkRepository = new SqliteEntryLinkRepository(connections);
-            var activityRepository = new SqliteActivityLogRepository(connections);
-            var fileStorage = new LocalFileStorageService(paths);
             var clock = new TestClock(new DateTime(2026, 9, 2, 12, 0, 0, DateTimeKind.Utc));
+            var services = new ServiceCollection();
 
-            var projectService = new ProjectService(projectRepository, clock);
-            var entryService = new EntryService(projectRepository, entryRepository, clock);
-            var templateService = new TemplateService(templateRepository, projectRepository, entryRepository, clock);
-            var tagService = new TagService(tagRepository, entryRepository, clock);
-            var attachmentService = new AttachmentService(attachmentRepository, entryRepository, projectRepository, fileStorage, clock);
-            var collectionService = new CollectionService(collectionRepository, projectRepository, entryRepository, clock);
-            var linkService = new EntryLinkService(linkRepository, entryRepository, clock);
-            var activityService = new ActivityLogService(activityRepository, clock);
-            var searchService = new SearchService(entryRepository);
-            var exportService = new MarkdownProjectExportService(
-                projectRepository,
-                entryRepository,
-                tagRepository,
-                collectionRepository,
-                attachmentRepository,
-                paths,
-                clock);
-            var backupService = new LocalBackupService(connections, paths, clock);
+            // Register the deterministic test clock before the shared Core. AddSasdWorkbenchCore uses
+            // TryAdd for replaceable adapters, so hosts/tests can override them without copying the
+            // production composition root.
+            services.AddSingleton<IClock>(clock);
+            services.AddSasdWorkbenchCore(paths);
+
+            using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
+
+            var connections = serviceProvider.GetRequiredService<SqliteConnectionFactory>();
+            var migrator = serviceProvider.GetRequiredService<DatabaseMigrator>();
+            await migrator.MigrateAsync();
+            await migrator.MigrateAsync();
+
+            // Resolve every V1 use-case service through the same registration path used by hosts. This
+            // turns the smoke test into a guard against composition-root drift as the product family grows.
+            var projectService = serviceProvider.GetRequiredService<ProjectService>();
+            var entryService = serviceProvider.GetRequiredService<EntryService>();
+            var templateService = serviceProvider.GetRequiredService<TemplateService>();
+            var tagService = serviceProvider.GetRequiredService<TagService>();
+            var attachmentService = serviceProvider.GetRequiredService<AttachmentService>();
+            var collectionService = serviceProvider.GetRequiredService<CollectionService>();
+            var linkService = serviceProvider.GetRequiredService<EntryLinkService>();
+            var activityService = serviceProvider.GetRequiredService<ActivityLogService>();
+            var searchService = serviceProvider.GetRequiredService<SearchService>();
+            var exportService = serviceProvider.GetRequiredService<IProjectExportService>();
+            var backupService = serviceProvider.GetRequiredService<IBackupService>();
 
             var project = await projectService.CreateAsync("Core smoke test", "Persistence round-trip", "general");
             Assert(project.Version == 1, "A new project must start at version 1.");

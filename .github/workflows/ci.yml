@@ -28,5 +28,5 @@ jobs:
       - name: Build
         run: dotnet build SASD-Workbench.slnx --configuration Release --no-restore
 
-      - name: Run V0.1 smoke tests
+      - name: Run V1 core smoke tests
         run: dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build

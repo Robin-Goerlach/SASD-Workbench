@@ -16,13 +16,29 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - SQLite project and entry repositories with optimistic version checks.
 - Local Workbench data-path abstraction.
 - Minimal WinForms desktop host for project and entry editing.
-- Package-free end-to-end V0.1 smoke test.
+- Package-light end-to-end Core smoke test.
 - GitHub Actions CI workflow.
 - Agent engineering guardrails in `AGENTS.md`.
+- V0.5 Core Content support for templates, tags, entry-tag assignments and controlled attachments.
+- SHA-256 hashing and controlled local storage for attachment files.
+- Template-based entry creation.
+- V1 hierarchical collections with many-to-many entry membership.
+- V1 typed entry relations and lightweight activity logging.
+- V1 entry search and filters for project, type, status, collection and tag.
+- Portable Markdown project export including attachment copies and hashes.
+- Full local backup/restore with SQLite snapshots, archive validation, path-traversal protection and pre-restore safety backups.
+- Shared `AddSasdWorkbenchCore(...)` dependency-injection registration for reusable Workbench hosts.
 
 ### Changed
 
 - Implementation baseline moved from the original .NET 8 planning assumption to .NET 10 LTS for the new shared codebase.
+- WinForms startup now consumes the same canonical Core registration that future specialist Workbench hosts can reuse.
+- The V1 Core smoke test now validates the production composition root in addition to real persistence, migration, search, export and backup/restore round-trips.
+
+### Fixed
+
+- Corrected SQL clause composition in SQLite entry search that could produce `FROM entries eWHERE ...`.
+- Disabled connection pooling for transient backup snapshot/validation databases so Windows file handles do not block archive creation or restore file moves.
 
 ## [0.0.0] - 2026-05-12
 

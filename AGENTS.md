@@ -10,6 +10,8 @@ For architectural or data-model changes, read:
 - `docs/020_Pflichtenheft_MVP.md`
 - `docs/030_Architektur_Dokument.md`
 - `docs/040_Database_Design.md`
+- `docs/045_Cross_Cutting_Features.md`
+- `docs/050_Development_Roadmap.md`
 
 ## Core architectural rule
 
@@ -24,6 +26,14 @@ Infrastructure -> Application + Domain
 
 The Domain project must not reference SQLite, Windows Forms, the file system, or profile-specific hosts.
 
+## Shared host composition
+
+Hosts must use `AddSasdWorkbenchCore(...)` from `SASD.Workbench.Infrastructure.DependencyInjection` as the canonical registration of the common local Core.
+
+A specialized Workbench host may add its own UI, profile and module services after the common Core registration. Do not copy the SQLite repository/service wiring into every future Biblical, Health, Admin, Research or Engineering host. If a new profile-neutral Core service is added, register it centrally and extend the composition smoke-test path.
+
+The host remains responsible for selecting the Workbench data root and running database migrations before the UI starts.
+
 ## Build and verification
 
 Use the pinned SDK from `global.json`.
@@ -34,7 +44,7 @@ dotnet build SASD-Workbench.slnx --configuration Release --no-restore
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
-The smoke test must remain package-light and verify a real SQLite persistence round-trip.
+The V1 Core smoke test must remain package-light and verify a real SQLite persistence round-trip. It also resolves the production Core registration so composition-root drift is detected by CI.
 
 ## Database changes
 
@@ -51,12 +61,14 @@ The WinForms project is a host, not the business-logic layer.
 
 Event handlers may collect input, call Application services, and render results. They must not contain persistence, export, backup, or profile-specific business rules.
 
+As V1 grows, prefer focused controls/dialogs over continuously expanding `MainForm`. Shared use cases belong below the UI layer so later Workbench hosts can reuse them.
+
 ## Definition of done for a core change
 
 A change is not complete until:
 
 1. it compiles with warnings treated as errors;
-2. the V0.1 smoke test passes;
+2. the V1 Core smoke test passes;
 3. database changes include migrations where required;
 4. public core classes/methods have useful XML documentation;
 5. the change does not introduce avoidable profile-specific coupling;
