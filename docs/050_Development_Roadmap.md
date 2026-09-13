@@ -54,7 +54,7 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - hierarchische Collections
 - Mehrfachzuordnung von Entries zu Collections
 - typisierte Entry Relations
-- Activity Log Light
+- Activity Log Light mit automatischer transaktionaler Aufzeichnung von SQLite-Core-Mutationen
 - Suche und Filter
 - Markdown-Projektexport
 - Full Backup mit SQLite-Snapshot
@@ -66,8 +66,9 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - wiederverwendbare profile-neutrale Core-Template-Definitionen
 - fokussierte WinForms-Dialoge für Search, Collections, Relations und Activity
 - Desktop-Kommandos für Export sowie Backup/Restore
+- Developer Guide und dokumentierte Teststrategie
 
-Für den internen V1-Einsatz fehlen vor allem noch Test-/Developer-Dokumentation, eine klare automatische Activity-Recording-Strategie und ein strukturierter Nutzertest.
+Für den internen V1-Einsatz fehlen vor allem noch ein strukturierter Nutzertest und die anschließende Konsolidierung der dabei gefundenen Bedienungs-/Qualitätsprobleme.
 
 ---
 
@@ -81,6 +82,8 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] Entry kann mehreren Collections angehören
 - [x] Entry Relations
 - [x] Activity Log Light
+- [x] automatische Activity-Aufzeichnung für persistierte SQLite-Core-Mutationen
+- [x] gemeinsame SQLite-Transaktion für Primärmutation + automatische Activity
 - [x] Suche und Filter
 - [x] Markdown-Projektexport
 - [x] Full Backup
@@ -88,6 +91,10 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] WinForms-Integration der V1-Kernfunktionen Search / Collections / Relations / Activity / Export / Backup / Restore
 - [x] Migrationen im realen End-to-End-Smoke-Test wiederholt/idempotent ausführen
 - [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
+- [x] Developer Guide
+- [x] Test Strategy
+
+Die Activity History bleibt bewusst ein leichtgewichtiges chronologisches Protokoll. Sie ist kein manipulationssicherer regulatorischer Audit Trail. Siehe `docs/adr/ADR-003-transactional-lightweight-activity-history.md`.
 
 ### Relation Types
 
@@ -297,10 +304,13 @@ Stand 2026-09-13:
 5. [x] Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
 6. [x] Activity Log in UI sichtbar machen.
 7. [x] Neue V1-Funktionen in fokussierte Dialoge auslagern, statt `MainForm` mit Featurelogik zu überladen.
-8. [ ] Semantik und Transaktionsverhalten für automatisches Activity Recording der mutierenden Core-Use-Cases festlegen und implementieren.
-9. [ ] Developer Guide und Test Strategy ergänzen.
-10. [ ] V1 internen Nutzertest durchführen.
-11. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
+8. [x] Semantik und Transaktionsverhalten für automatisches Activity Recording der mutierenden Core-Use-Cases festlegen und implementieren.
+9. [x] Developer Guide und Test Strategy ergänzen.
+10. [ ] V1 internen Nutzertest durchführen und Findings priorisieren.
+11. [ ] Aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
+12. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
+
+Parallel zur V1-Konsolidierung wird die Testlandschaft schrittweise in Domain-, Application- und Infrastructure-Tests aufgeteilt. Der reale End-to-End-Smoke-Test bleibt dabei als breites Recovery-/Composition-Gate bestehen.
 
 ---
 
@@ -328,7 +338,9 @@ Mindestens erforderlich:
 - persistente Speicherung getestet
 - Migration vorhanden, falls Schemaänderung nötig
 - Fehlerpfade berücksichtigt
+- Activity History konsistent
 - Datenexport/Backup nicht gebrochen
+- Restore berücksichtigt
 - CI grün
 - Smoke-/Integrationstest erweitert
 - Dokumentation aktualisiert

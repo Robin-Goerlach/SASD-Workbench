@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -9,12 +11,21 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 /// <summary>
 /// Persists attachment metadata in SQLite while file bytes remain in controlled storage.
 /// </summary>
+/// <remarks>
+/// Metadata changes and their activity records share one SQLite transaction. The attachment file
+/// itself lives in the file system, so SQLite cannot make the bytes and metadata one ACID unit. The
+/// application service compensates a failed metadata insert by deleting the newly stored file.
+/// </remarks>
 public sealed class SqliteAttachmentRepository : IAttachmentRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteAttachmentRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteAttachmentRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<Attachment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -46,7 +57,9 @@ public sealed class SqliteAttachmentRepository : IAttachmentRepository
     {
         ArgumentNullException.ThrowIfNull(attachment);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO attachments
                 (id, entry_id, original_file_name, stored_file_name, relative_path, mime_type,
@@ -57,13 +70,29 @@ public sealed class SqliteAttachmentRepository : IAttachmentRepository
             """;
         AddParameters(command, attachment);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        var projectId = await _activity.RequireProjectIdForEntryAsync(
+            connection, transaction, attachment.EntryId, cancellationToken).ConfigureAwait(false);
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.AttachmentAdded,
+            $"Added attachment '{attachment.OriginalFileName}'.",
+            projectId: projectId,
+            entryId: attachment.EntryId,
+            newValue: attachment.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(Attachment attachment, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(attachment);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             UPDATE attachments
             SET comment = $comment, updated_at = $updatedAt, is_deleted = $isDeleted, deleted_at = $deletedAt
@@ -75,6 +104,23 @@ public sealed class SqliteAttachmentRepository : IAttachmentRepository
         {
             throw new InvalidOperationException($"Attachment '{attachment.Id}' does not exist.");
         }
+
+        var projectId = await _activity.RequireProjectIdForEntryAsync(
+            connection, transaction, attachment.EntryId, cancellationToken).ConfigureAwait(false);
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            attachment.IsDeleted ? CoreActivityTypes.AttachmentDeleted : CoreActivityTypes.AttachmentUpdated,
+            attachment.IsDeleted
+                ? $"Deleted attachment metadata for '{attachment.OriginalFileName}'."
+                : $"Updated attachment metadata for '{attachment.OriginalFileName}'.",
+            projectId: projectId,
+            entryId: attachment.EntryId,
+            oldValue: attachment.IsDeleted ? attachment.Id.ToString("D") : null,
+            newValue: attachment.IsDeleted ? null : attachment.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     private const string SelectColumns = """

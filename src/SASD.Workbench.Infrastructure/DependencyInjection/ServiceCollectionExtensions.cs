@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Services;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Backup;
 using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
@@ -43,6 +44,11 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<IClock, SystemClock>();
         services.TryAddSingleton<IFileStorageService, LocalFileStorageService>();
+
+        // Automatic activity recording is an Infrastructure concern because the SQLite repositories
+        // can write a mutation and its lightweight history item in one database transaction. Keeping
+        // the writer internal prevents hosts from depending on SQLite-specific implementation details.
+        services.TryAddSingleton<SqliteActivityWriter>();
 
         services.TryAddSingleton<IProjectRepository, SqliteProjectRepository>();
         services.TryAddSingleton<IEntryRepository, SqliteEntryRepository>();

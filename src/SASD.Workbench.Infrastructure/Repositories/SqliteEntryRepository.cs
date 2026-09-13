@@ -4,6 +4,8 @@ using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Models;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -14,9 +16,13 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 public sealed class SqliteEntryRepository : IEntryRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteEntryRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteEntryRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<Entry?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -96,7 +102,9 @@ public sealed class SqliteEntryRepository : IEntryRepository
     {
         ArgumentNullException.ThrowIfNull(entry);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO entries
                 (id, project_id, entry_type, status, title, summary, content_markdown,
@@ -107,13 +115,27 @@ public sealed class SqliteEntryRepository : IEntryRepository
             """;
         AddParameters(command, entry);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.EntryCreated,
+            $"Created entry '{entry.Title}' ({entry.EntryType}).",
+            projectId: entry.ProjectId,
+            entryId: entry.Id,
+            newValue: entry.Status,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(Entry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             UPDATE entries
             SET entry_type = $entryType,
@@ -136,6 +158,24 @@ public sealed class SqliteEntryRepository : IEntryRepository
         {
             throw new DBConcurrencyException($"Entry '{entry.Id}' was changed or removed by another operation.");
         }
+
+        var actionType = entry.IsDeleted
+            ? CoreActivityTypes.EntryDeleted
+            : entry.IsArchived
+                ? CoreActivityTypes.EntryArchived
+                : CoreActivityTypes.EntryUpdated;
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            actionType,
+            $"Persisted entry '{entry.Title}' ({entry.EntryType}) with status '{entry.Status}'.",
+            projectId: entry.ProjectId,
+            entryId: entry.Id,
+            newValue: entry.Status,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     private const string SelectColumns = """

@@ -33,6 +33,12 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Central open relation vocabulary with stable built-in keys and validation for profile-defined relation keys.
 - Focused WinForms dialogs for project-scoped search, collection membership, typed relations and activity history.
 - Desktop commands for portable Markdown project export and validated full backup/restore.
+- Stable `CoreActivityTypes` keys for automatic Core history records.
+- Transactional automatic activity recording for SQLite-backed project, entry, template, tag, collection, relation and attachment-metadata mutations.
+- Developer Guide describing shared-Core extension rules, migration/storage boundaries and host composition.
+- Test Strategy covering unit/integration growth, the real SQLite smoke path, recovery gates and failure-path expectations.
+- V1 Internal Acceptance Test checklist for repeatable desktop, recovery and UX validation.
+- ADR-003 documenting lightweight activity-history guarantees and explicit non-goals.
 
 ### Changed
 
@@ -41,6 +47,8 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - The V1 Core smoke test now validates the production composition root in addition to real persistence, migration, search, export and backup/restore round-trips.
 - Entry relations now normalize stable machine keys to lowercase snake case while still allowing future profile-specific relation types.
 - The desktop shell now delegates V1 Core tools to focused dialogs instead of adding persistence or feature logic directly to `MainForm`.
+- SQLite repositories now write automatic activity records in the same database transaction as the primary mutation; idempotent no-op assignments do not create duplicate history.
+- The V1 smoke test now forces an activity-write failure to verify rollback and verifies that backup/restore returns activity history to the same point in time as the restored data.
 
 ### Fixed
 
