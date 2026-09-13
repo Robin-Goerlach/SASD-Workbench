@@ -64,8 +64,10 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - zentrale profile-neutrale Entry-Type-Schlüssel
 - offenes, validiertes Relation-Vokabular
 - wiederverwendbare profile-neutrale Core-Template-Definitionen
+- fokussierte WinForms-Dialoge für Search, Collections, Relations und Activity
+- Desktop-Kommandos für Export sowie Backup/Restore
 
-Noch nicht abgeschlossen ist insbesondere die vollständige Desktop-Integration der V1-Funktionen.
+Für den internen V1-Einsatz fehlen vor allem noch Test-/Developer-Dokumentation, eine klare automatische Activity-Recording-Strategie und ein strukturierter Nutzertest.
 
 ---
 
@@ -83,7 +85,7 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] Markdown-Projektexport
 - [x] Full Backup
 - [x] validierter Restore
-- [ ] WinForms-Integration der Kernfunktionen
+- [x] WinForms-Integration der V1-Kernfunktionen Search / Collections / Relations / Activity / Export / Backup / Restore
 - [x] Migrationen im realen End-to-End-Smoke-Test wiederholt/idempotent ausführen
 - [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
 
@@ -142,12 +144,12 @@ V1.1 soll kleine, risikoarme Funktionen ergänzen, die mehrere Profile sofort nu
 - [x] profile-neutrale Definition für Hypothesis Template
 - [ ] kontrollierte Installation/Aktualisierung kanonischer System-Templates in persistenten Workbench-Daten
 - [ ] External Links / References
-- [ ] bessere Relation-UI
-- [ ] Backlink-Anzeige
+- [x] erste generische Relation-UI
+- [x] eingehende und ausgehende Relations in einer gemeinsamen Ansicht
 - [ ] Attachment-Kommentare
 - [ ] Attachment Templates
 - [ ] Checklists
-- [ ] bessere Suche / Filter UX
+- [ ] bessere Suche / Filter UX über den funktionalen V1-Dialog hinaus
 - [ ] erste Quellen-Metadaten ohne vollständige Literaturverwaltung
 
 Die Core-Template-Skelette liegen zunächst als kanonischer Katalog im Application Layer vor. Eine automatische SQLite-Seed-Logik wird bewusst erst eingeführt, wenn Identität, Benutzeranpassungen und Update-/Override-Regeln für System-Templates geklärt sind.
@@ -292,12 +294,13 @@ Stand 2026-09-13:
 2. [x] Gemeinsamen profile-neutralen Composition Root schaffen, damit spätere Workbench-Hosts keine Core-Verdrahtung kopieren.
 3. [x] `research_question`, `research_source`, `observation`, `hypothesis`, `finding` und `conclusion` als neutrale Core Entry Types und Template-Definitionen ergänzen.
 4. [x] Relation Types zentral definieren und als offenes Vokabular validieren.
-5. [ ] Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
-6. [ ] Activity Log in UI sichtbar machen.
-7. [ ] WinForms-Shell in fokussierte Controls/Dialoge zerlegen, damit neue Core-Funktionen `MainForm` nicht monolithisch machen.
-8. [ ] Developer Guide und Test Strategy ergänzen.
-9. [ ] V1 internen Nutzertest durchführen.
-10. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
+5. [x] Collections, Suche, Relations, Export und Backup/Restore in WinForms integrieren.
+6. [x] Activity Log in UI sichtbar machen.
+7. [x] Neue V1-Funktionen in fokussierte Dialoge auslagern, statt `MainForm` mit Featurelogik zu überladen.
+8. [ ] Semantik und Transaktionsverhalten für automatisches Activity Recording der mutierenden Core-Use-Cases festlegen und implementieren.
+9. [ ] Developer Guide und Test Strategy ergänzen.
+10. [ ] V1 internen Nutzertest durchführen.
+11. [ ] Erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
 
 ---
 
