@@ -1,8 +1,7 @@
-using SASD.Workbench.Application.Services;
+using Microsoft.Extensions.DependencyInjection;
 using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
-using SASD.Workbench.Infrastructure.Repositories;
-using SASD.Workbench.Infrastructure.Time;
+using SASD.Workbench.Infrastructure.DependencyInjection;
 
 namespace SASD.Workbench.WinForms;
 
@@ -18,17 +17,22 @@ internal static class Program
             var paths = WorkbenchDataPaths.CreateDefault();
             paths.EnsureDirectories();
 
-            var connections = new SqliteConnectionFactory(paths.DatabasePath);
-            var migrator = new DatabaseMigrator(connections);
+            var services = new ServiceCollection();
+            services.AddSasdWorkbenchCore(paths);
+            services.AddSingleton<MainForm>();
+
+            // Validate the complete composition root before showing any UI. A missing registration
+            // should fail at startup with one clear error instead of surfacing later in a button click.
+            using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
+
+            var migrator = serviceProvider.GetRequiredService<DatabaseMigrator>();
             migrator.MigrateAsync().GetAwaiter().GetResult();
 
-            var clock = new SystemClock();
-            var projectRepository = new SqliteProjectRepository(connections);
-            var entryRepository = new SqliteEntryRepository(connections);
-            var projectService = new ProjectService(projectRepository, clock);
-            var entryService = new EntryService(projectRepository, entryRepository, clock);
-
-            System.Windows.Forms.Application.Run(new MainForm(projectService, entryService, paths));
+            System.Windows.Forms.Application.Run(serviceProvider.GetRequiredService<MainForm>());
         }
         catch (Exception ex)
         {
