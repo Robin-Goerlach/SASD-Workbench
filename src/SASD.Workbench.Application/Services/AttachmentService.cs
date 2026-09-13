@@ -85,6 +85,26 @@ public sealed class AttachmentService
     }
 
     /// <summary>
+    /// Updates the user-authored comment while leaving immutable file identity and hash metadata untouched.
+    /// </summary>
+    public async Task<Attachment> UpdateCommentAsync(
+        Guid attachmentId,
+        string? comment,
+        CancellationToken cancellationToken = default)
+    {
+        var attachment = await _attachments.GetByIdAsync(attachmentId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Attachment '{attachmentId}' does not exist.");
+        if (attachment.IsDeleted)
+        {
+            throw new InvalidOperationException($"Attachment '{attachmentId}' is deleted.");
+        }
+
+        attachment.UpdateComment(comment, _clock.UtcNow);
+        await _attachments.UpdateAsync(attachment, cancellationToken).ConfigureAwait(false);
+        return attachment;
+    }
+
+    /// <summary>
     /// Soft-deletes attachment metadata. Physical file deletion is intentionally deferred to explicit cleanup.
     /// </summary>
     public async Task DeleteAsync(Guid attachmentId, CancellationToken cancellationToken = default)

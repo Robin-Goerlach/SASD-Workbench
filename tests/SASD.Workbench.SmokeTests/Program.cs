@@ -126,6 +126,30 @@ internal static class Program
             var templateEntries = await templateService.ListAsync(profileKey: "general");
             Assert(templateEntries.Count == 1 && templateEntries[0].Id == template.Id, "Template round-trip failed.");
 
+            // General templates are deliberately valid in specialist profiles. The repository listing
+            // must mirror the CreateEntryAsync compatibility rule so future specialist hosts do not hide
+            // a common template that they are otherwise allowed to use.
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var specialistProject = await projectService.CreateAsync("Specialist template consumer", profileKey: "biblical");
+            var specialistTemplates = await templateService.ListAsync(specialistProject.Id, specialistProject.ProfileKey);
+            Assert(specialistTemplates.Any(candidate => candidate.Id == template.Id), "A general template was hidden from a specialist profile.");
+            await projectService.DeleteAsync(specialistProject.Id);
+            Assert((await projectService.ListAsync()).Count == 1, "Deleted specialist test project remained in the active project list.");
+
+            // User-managed templates can be project-local and soft-deleted independently of entries.
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var disposableTemplate = await templateService.CreateAsync(
+                "Disposable project template",
+                CoreEntryTypes.Note,
+                "draft",
+                "# Disposable\n",
+                projectId: project.Id,
+                profileKey: project.ProfileKey,
+                description: "Smoke-test template deletion");
+            await templateService.DeleteAsync(disposableTemplate.Id);
+            var projectTemplates = await templateService.ListAsync(project.Id, project.ProfileKey);
+            Assert(!projectTemplates.Any(candidate => candidate.Id == disposableTemplate.Id), "Deleted template remained visible in template listing.");
+
             clock.Advance(TimeSpan.FromMinutes(1));
             var templatedEntry = await templateService.CreateEntryAsync(project.Id, template.Id, "Template-created entry");
             Assert(templatedEntry.EntryType == CoreEntryTypes.ResearchNote, "Template entry type was not copied.");
@@ -172,6 +196,7 @@ internal static class Program
             Assert(activity.Count(item => item.ActionType == CoreActivityTypes.TagAttached) == 1, "Idempotent repeated tag assignment must not create duplicate activity.");
             Assert(activity.Count(item => item.ActionType == CoreActivityTypes.CollectionEntryAdded) == 2, "Collection membership activities are incomplete.");
             Assert(activity.Count(item => item.ActionType == CoreActivityTypes.RelationCreated) == 2, "Relation creation activities are incomplete.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.TemplateDeleted), "Automatic template deletion activity is missing.");
             Assert(activity.Any(item => item.ActionType == "smoke_test"), "Explicit activity recording round-trip failed.");
 
             var sourcePath = Path.Combine(root, "source-attachment.txt");
@@ -186,8 +211,15 @@ internal static class Program
             Assert(File.Exists(storedPath), "Attachment was not copied into controlled storage.");
             Assert(await File.ReadAllTextAsync(storedPath) == sourceContent, "Stored attachment content differs from the source.");
 
+            clock.Advance(TimeSpan.FromMinutes(1));
+            attachment = await attachmentService.UpdateCommentAsync(attachment.Id, "Updated smoke-test comment");
+            Assert(attachment.Comment == "Updated smoke-test comment", "Attachment comment update did not return the new value.");
+            var commentRoundTrip = await attachmentService.ListByEntryAsync(templatedEntry.Id);
+            Assert(commentRoundTrip.Count == 1 && commentRoundTrip[0].Comment == "Updated smoke-test comment", "Attachment comment update was not persisted.");
+
             activity = await activityService.ListAsync(project.Id);
             Assert(activity.Count(item => item.ActionType == CoreActivityTypes.AttachmentAdded) == 1, "Attachment metadata activity is missing.");
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.AttachmentUpdated) == 1, "Attachment comment update activity is missing.");
 
             var textSearch = await searchService.SearchAsync(new EntrySearchQuery(Text: "AlphaBeta", ProjectId: project.Id));
             Assert(textSearch.Count == 1 && textSearch[0].Id == entry.Id, "Text search did not find content Markdown.");
@@ -234,6 +266,7 @@ internal static class Program
             Assert(!restoredEntry.IsDeleted && restoredEntry.Title == "First entry updated", "Restored entry state is incorrect.");
             var restoredAttachments = await attachmentService.ListByEntryAsync(templatedEntry.Id);
             Assert(restoredAttachments.Count == 1 && restoredAttachments[0].Id == attachment.Id, "Restored attachment metadata is incorrect.");
+            Assert(restoredAttachments[0].Comment == "Updated smoke-test comment", "Restore lost the attachment comment update.");
             Assert(File.Exists(storedPath), "Restore did not restore the physical attachment.");
             Assert(await File.ReadAllTextAsync(storedPath) == sourceContent, "Restored attachment content is incorrect.");
 
@@ -243,6 +276,7 @@ internal static class Program
             Assert(!activity.Any(item => item.ActionType == CoreActivityTypes.EntryDeleted), "Restore kept activity that occurred only after the backup.");
             Assert(!activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentDeleted), "Restore kept attachment activity that occurred only after the backup.");
             Assert(activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentAdded), "Restore lost pre-backup activity history.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentUpdated), "Restore lost pre-backup attachment update history.");
 
             await VerifyMigrationCountAsync(connections, expectedCount: 3);
 

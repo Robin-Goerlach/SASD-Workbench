@@ -10,13 +10,17 @@ namespace SASD.Workbench.WinForms;
 /// Hosts the common V1 desktop workflow and delegates focused Core tools to separate dialogs.
 /// </summary>
 /// <remarks>
-/// This form intentionally remains a UI coordinator. Search, collections, relations and activity
-/// have their own dialogs; persistence, export and backup rules remain below the WinForms layer.
+/// This form intentionally remains a UI coordinator. Search, templates, tags, attachments,
+/// collections, relations and activity have their own dialogs; persistence, export and backup rules
+/// remain below the WinForms layer.
 /// </remarks>
 public sealed class MainForm : Form
 {
     private readonly ProjectService _projectService;
     private readonly EntryService _entryService;
+    private readonly TemplateService _templateService;
+    private readonly TagService _tagService;
+    private readonly AttachmentService _attachmentService;
     private readonly SearchService _searchService;
     private readonly CollectionService _collectionService;
     private readonly EntryLinkService _entryLinkService;
@@ -37,6 +41,9 @@ public sealed class MainForm : Form
     private readonly Label _statusLabel = new();
 
     private readonly ToolStripButton _searchButton = new("Search");
+    private readonly ToolStripButton _templatesButton = new("Templates");
+    private readonly ToolStripButton _tagsButton = new("Tags");
+    private readonly ToolStripButton _attachmentsButton = new("Attachments");
     private readonly ToolStripButton _collectionsButton = new("Collections");
     private readonly ToolStripButton _relationsButton = new("Relations");
     private readonly ToolStripButton _activityButton = new("Activity");
@@ -49,6 +56,9 @@ public sealed class MainForm : Form
     public MainForm(
         ProjectService projectService,
         EntryService entryService,
+        TemplateService templateService,
+        TagService tagService,
+        AttachmentService attachmentService,
         SearchService searchService,
         CollectionService collectionService,
         EntryLinkService entryLinkService,
@@ -59,6 +69,9 @@ public sealed class MainForm : Form
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
+        _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
+        _tagService = tagService ?? throw new ArgumentNullException(nameof(tagService));
+        _attachmentService = attachmentService ?? throw new ArgumentNullException(nameof(attachmentService));
         _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
         _collectionService = collectionService ?? throw new ArgumentNullException(nameof(collectionService));
         _entryLinkService = entryLinkService ?? throw new ArgumentNullException(nameof(entryLinkService));
@@ -127,6 +140,9 @@ public sealed class MainForm : Form
         };
 
         _searchButton.Click += SearchButton_Click;
+        _templatesButton.Click += TemplatesButton_Click;
+        _tagsButton.Click += TagsButton_Click;
+        _attachmentsButton.Click += AttachmentsButton_Click;
         _collectionsButton.Click += CollectionsButton_Click;
         _relationsButton.Click += RelationsButton_Click;
         _activityButton.Click += ActivityButton_Click;
@@ -137,6 +153,9 @@ public sealed class MainForm : Form
         toolStrip.Items.AddRange(
         [
             _searchButton,
+            _templatesButton,
+            _tagsButton,
+            _attachmentsButton,
             _collectionsButton,
             _relationsButton,
             _activityButton,
@@ -385,6 +404,43 @@ public sealed class MainForm : Form
         {
             _ = ReloadEntriesFromDialogAsync(project.Id, selected.Id);
         }
+    }
+
+    private async void TemplatesButton_Click(object? sender, EventArgs e)
+    {
+        if (_projectList.SelectedItem is not Project project)
+        {
+            return;
+        }
+
+        using var dialog = new TemplatesDialog(_templateService, project, _entryList.SelectedItem as Entry);
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.CreatedEntry is Entry createdEntry)
+        {
+            await ReloadEntriesAsync(project.Id, createdEntry.Id).ConfigureAwait(true);
+            SetStatus($"Entry '{createdEntry.Title}' created from template.");
+        }
+    }
+
+    private void TagsButton_Click(object? sender, EventArgs e)
+    {
+        if (_entryList.SelectedItem is not Entry entry)
+        {
+            return;
+        }
+
+        using var dialog = new TagsDialog(_tagService, entry);
+        dialog.ShowDialog(this);
+    }
+
+    private void AttachmentsButton_Click(object? sender, EventArgs e)
+    {
+        if (_entryList.SelectedItem is not Entry entry)
+        {
+            return;
+        }
+
+        using var dialog = new AttachmentsDialog(_attachmentService, entry);
+        dialog.ShowDialog(this);
     }
 
     private void CollectionsButton_Click(object? sender, EventArgs e)
@@ -669,6 +725,9 @@ public sealed class MainForm : Form
         var hasProject = _projectList.SelectedItem is Project;
         var hasEntry = _entryList.SelectedItem is Entry;
         _searchButton.Enabled = hasProject;
+        _templatesButton.Enabled = hasProject;
+        _tagsButton.Enabled = hasEntry;
+        _attachmentsButton.Enabled = hasEntry;
         _collectionsButton.Enabled = hasProject;
         _relationsButton.Enabled = hasEntry;
         _activityButton.Enabled = hasProject;

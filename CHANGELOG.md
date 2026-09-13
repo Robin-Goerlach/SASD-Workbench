@@ -39,6 +39,9 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Test Strategy covering unit/integration growth, the real SQLite smoke path, recovery gates and failure-path expectations.
 - V1 Internal Acceptance Test checklist for repeatable desktop, recovery and UX validation.
 - ADR-003 documenting lightweight activity-history guarantees and explicit non-goals.
+- Focused WinForms content dialogs for reusable templates, tag assignments and controlled attachments.
+- Desktop workflow for creating entries from templates and saving the current entry as a project- or profile-scoped template.
+- Desktop attachment comment editing backed by the shared Application service.
 
 ### Changed
 
@@ -49,11 +52,14 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - The desktop shell now delegates V1 Core tools to focused dialogs instead of adding persistence or feature logic directly to `MainForm`.
 - SQLite repositories now write automatic activity records in the same database transaction as the primary mutation; idempotent no-op assignments do not create duplicate history.
 - The V1 smoke test now forces an activity-write failure to verify rollback and verifies that backup/restore returns activity history to the same point in time as the restored data.
+- Profile-specific template queries now also include shared `general` templates, matching the existing template-use rules for specialist Workbench hosts.
+- The V1 acceptance checklist now covers templates, tags, attachments and their recovery/activity behavior before V2 work begins.
 
 ### Fixed
 
 - Corrected SQL clause composition in SQLite entry search that could produce `FROM entries eWHERE ...`.
 - Disabled connection pooling for transient backup snapshot/validation databases so Windows file handles do not block archive creation or restore file moves.
+- Aligned template listing with template creation rules so a specialist profile can discover the shared general templates it is allowed to use.
 
 ## [0.0.0] - 2026-05-12
 

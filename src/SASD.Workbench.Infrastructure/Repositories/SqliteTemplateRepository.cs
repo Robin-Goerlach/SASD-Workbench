@@ -42,13 +42,19 @@ public sealed class SqliteTemplateRepository : ITemplateRepository
         var result = new List<Template>();
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
+
+        // A specialist profile may consume templates that are explicitly made for that profile as
+        // well as the shared "general" vocabulary. This mirrors TemplateService.CreateEntryAsync,
+        // which deliberately accepts a general template for every project profile. Keeping selection
+        // and use rules aligned prevents future Biblical/Health/Admin hosts from hiding otherwise
+        // valid common templates.
         command.CommandText = """
             SELECT id, project_id, profile_key, name, description, entry_type, default_status,
                    content_markdown, is_system_template, is_deleted, created_at, updated_at, sort_order
             FROM templates
             WHERE is_deleted = 0
               AND ($projectId IS NULL OR project_id IS NULL OR project_id = $projectId)
-              AND ($profileKey IS NULL OR profile_key = $profileKey)
+              AND ($profileKey IS NULL OR profile_key = 'general' OR profile_key = $profileKey)
             ORDER BY sort_order, name COLLATE NOCASE;
             """;
         command.Parameters.AddWithValue("$projectId", projectId.HasValue ? projectId.Value.ToString("D") : DBNull.Value);
