@@ -11,6 +11,7 @@ public sealed class TemplateServiceTests
     [Fact]
     public async Task CreateEntryAsync_AllowsGeneralTemplateInSpecialistProfile()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var projects = new InMemoryProjectRepository();
         var entries = new InMemoryEntryRepository();
         var templates = new InMemoryTemplateRepository();
@@ -21,7 +22,7 @@ public sealed class TemplateServiceTests
         templates.Seed(template);
         var service = new TemplateService(templates, projects, entries, clock);
 
-        var entry = await service.CreateEntryAsync(project.Id, template.Id, "Nathanael study");
+        var entry = await service.CreateEntryAsync(project.Id, template.Id, "Nathanael study", cancellationToken);
 
         Assert.Equal(project.Id, entry.ProjectId);
         Assert.Equal(CoreEntryTypes.ResearchNote, entry.EntryType);
@@ -34,6 +35,7 @@ public sealed class TemplateServiceTests
     [Fact]
     public async Task CreateEntryAsync_RejectsTemplateFromDifferentSpecialistProfile()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var projects = new InMemoryProjectRepository();
         var entries = new InMemoryEntryRepository();
         var templates = new InMemoryTemplateRepository();
@@ -44,7 +46,7 @@ public sealed class TemplateServiceTests
         var service = new TemplateService(templates, projects, entries, new TestClock(Now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.CreateEntryAsync(project.Id, template.Id, "Should fail"));
+            () => service.CreateEntryAsync(project.Id, template.Id, "Should fail", cancellationToken));
 
         Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(entries.All);
@@ -53,6 +55,7 @@ public sealed class TemplateServiceTests
     [Fact]
     public async Task CreateEntryAsync_RejectsProjectLocalTemplateFromAnotherProject()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var projects = new InMemoryProjectRepository();
         var entries = new InMemoryEntryRepository();
         var templates = new InMemoryTemplateRepository();
@@ -65,13 +68,14 @@ public sealed class TemplateServiceTests
         var service = new TemplateService(templates, projects, entries, new TestClock(Now));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.CreateEntryAsync(project.Id, template.Id, "Should fail"));
+            () => service.CreateEntryAsync(project.Id, template.Id, "Should fail", cancellationToken));
         Assert.Empty(entries.All);
     }
 
     [Fact]
     public async Task DeleteAsync_RejectsSystemTemplate()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var projects = new InMemoryProjectRepository();
         var entries = new InMemoryEntryRepository();
         var templates = new InMemoryTemplateRepository();
@@ -79,7 +83,8 @@ public sealed class TemplateServiceTests
         templates.Seed(systemTemplate);
         var service = new TemplateService(templates, projects, entries, new TestClock(Now));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(systemTemplate.Id));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteAsync(systemTemplate.Id, cancellationToken));
 
         Assert.Contains("System templates", exception.Message, StringComparison.Ordinal);
         Assert.False(systemTemplate.IsDeleted);
@@ -88,6 +93,7 @@ public sealed class TemplateServiceTests
     [Fact]
     public async Task DeleteAsync_SoftDeletesUserTemplateWithoutTouchingCreatedEntries()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var projects = new InMemoryProjectRepository();
         var entries = new InMemoryEntryRepository();
         var templates = new InMemoryTemplateRepository();
@@ -96,9 +102,9 @@ public sealed class TemplateServiceTests
         projects.Seed(project);
         templates.Seed(template);
         var service = new TemplateService(templates, projects, entries, new TestClock(Now));
-        var entry = await service.CreateEntryAsync(project.Id, template.Id, "Independent copy");
+        var entry = await service.CreateEntryAsync(project.Id, template.Id, "Independent copy", cancellationToken);
 
-        await service.DeleteAsync(template.Id);
+        await service.DeleteAsync(template.Id, cancellationToken);
 
         Assert.True(template.IsDeleted);
         Assert.False(entry.IsDeleted);
