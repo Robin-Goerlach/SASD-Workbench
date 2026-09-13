@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Models;
 using SASD.Workbench.Application.Services;
+using SASD.Workbench.Application.Templates;
+using SASD.Workbench.Domain.Metadata;
 using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
 using SASD.Workbench.Infrastructure.DependencyInjection;
@@ -56,6 +58,21 @@ internal static class Program
             var exportService = serviceProvider.GetRequiredService<IProjectExportService>();
             var backupService = serviceProvider.GetRequiredService<IBackupService>();
 
+            Assert(CoreEntryTypes.IsBuiltIn(CoreEntryTypes.ResearchQuestion), "Research question must be a Core entry type.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.ResearchQuestion), "Research question Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.ResearchSource), "Research source Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.Observation), "Observation Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.Hypothesis), "Hypothesis Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.Finding), "Finding Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Any(definition => definition.EntryType == CoreEntryTypes.Conclusion), "Conclusion Core template is missing.");
+            Assert(CoreTemplateCatalog.All.Select(definition => definition.EntryType).Distinct(StringComparer.Ordinal).Count() == CoreTemplateCatalog.All.Count, "Core template entry types must be unique in V1.");
+
+            Assert(EntryRelationTypes.IsBuiltIn(EntryRelationTypes.Supports), "Supports must be a built-in relation type.");
+            Assert(EntryRelationTypes.Normalize(" Custom_Relation ") == "custom_relation", "Custom relation keys must be normalized.");
+            AssertThrows<ArgumentException>(
+                () => EntryRelationTypes.Normalize("invalid relation"),
+                "Relation keys containing spaces must be rejected.");
+
             var project = await projectService.CreateAsync("Core smoke test", "Persistence round-trip", "general");
             Assert(project.Version == 1, "A new project must start at version 1.");
 
@@ -69,7 +86,7 @@ internal static class Program
             clock.Advance(TimeSpan.FromMinutes(1));
             var entry = await entryService.CreateAsync(
                 project.Id,
-                "note",
+                CoreEntryTypes.Note,
                 "First entry",
                 "Initial summary",
                 "# First entry\n\nInitial body.");
@@ -80,32 +97,33 @@ internal static class Program
                 "First entry updated",
                 "Updated summary",
                 "# First entry\n\nUpdated body with searchable phrase AlphaBeta.",
-                "research_note",
+                CoreEntryTypes.ResearchNote,
                 "in_work");
             Assert(savedEntry.Version == 2, "One logical entry save must advance the version exactly once.");
 
             var reloadedEntry = await entryService.GetByIdAsync(entry.Id)
                 ?? throw new InvalidOperationException("The entry could not be reloaded.");
             Assert(reloadedEntry.Title == "First entry updated", "The updated entry title was not persisted.");
-            Assert(reloadedEntry.EntryType == "research_note", "The updated entry type was not persisted.");
+            Assert(reloadedEntry.EntryType == CoreEntryTypes.ResearchNote, "The updated entry type was not persisted.");
             Assert(reloadedEntry.Status == "in_work", "The updated entry status was not persisted.");
             Assert(reloadedEntry.Version == 2, "The persisted entry version is incorrect.");
 
+            var researchNoteDefinition = CoreTemplateCatalog.All.Single(definition => definition.EntryType == CoreEntryTypes.ResearchNote);
             clock.Advance(TimeSpan.FromMinutes(1));
             var template = await templateService.CreateAsync(
-                "Research note",
-                "research_note",
-                "draft",
-                "# Question\n\n## Sources\n\n## Findings\n",
+                researchNoteDefinition.Name,
+                researchNoteDefinition.EntryType,
+                researchNoteDefinition.DefaultStatus,
+                researchNoteDefinition.ContentMarkdown,
                 profileKey: "general",
-                description: "Reusable research note template");
+                description: researchNoteDefinition.Description);
             var templateEntries = await templateService.ListAsync(profileKey: "general");
             Assert(templateEntries.Count == 1 && templateEntries[0].Id == template.Id, "Template round-trip failed.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
             var templatedEntry = await templateService.CreateEntryAsync(project.Id, template.Id, "Template-created entry");
-            Assert(templatedEntry.EntryType == "research_note", "Template entry type was not copied.");
-            Assert(templatedEntry.Status == "draft", "Template default status was not copied.");
+            Assert(templatedEntry.EntryType == CoreEntryTypes.ResearchNote, "Template entry type was not copied.");
+            Assert(templatedEntry.Status == researchNoteDefinition.DefaultStatus, "Template default status was not copied.");
             Assert(templatedEntry.ContentMarkdown.Contains("## Sources", StringComparison.Ordinal), "Template Markdown was not copied.");
             Assert(templatedEntry.Version == 1, "A template-created entry must begin at version 1.");
 
@@ -127,9 +145,11 @@ internal static class Program
             Assert(entryCollections.Count == 2, "An entry must be able to belong to multiple collections.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
-            var link = await linkService.CreateAsync(entry.Id, templatedEntry.Id, "related_to", "Smoke test relation");
+            var link = await linkService.CreateAsync(entry.Id, templatedEntry.Id, EntryRelationTypes.RelatedTo, "Smoke test relation");
+            var customLink = await linkService.CreateAsync(entry.Id, templatedEntry.Id, " Custom_Relation ", "Extensible relation vocabulary");
+            Assert(customLink.RelationType == "custom_relation", "Custom relation type was not normalized before persistence.");
             var links = await linkService.ListForEntryAsync(entry.Id);
-            Assert(links.Count == 1 && links[0].Id == link.Id, "Entry relation round-trip failed.");
+            Assert(links.Count == 2 && links.Any(candidate => candidate.Id == link.Id), "Entry relation round-trip failed.");
 
             clock.Advance(TimeSpan.FromMinutes(1));
             await activityService.RecordAsync(
@@ -229,6 +249,21 @@ internal static class Program
         {
             throw new InvalidOperationException(message);
         }
+    }
+
+    private static void AssertThrows<TException>(Action action, string message)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
     }
 
     private static void TryDeleteDirectory(string path)
