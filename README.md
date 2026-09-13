@@ -158,6 +158,7 @@ Core project documentation:
 - [050 – Development Roadmap](docs/050_Development_Roadmap.md)
 - [060 – Developer Guide](docs/060_Developer_Guide.md)
 - [070 – Test Strategy](docs/070_Test_Strategy.md)
+- [080 – V1 Internal Acceptance Test](docs/080_V1_Internal_Acceptance_Test.md)
 - [ADR-001 – Shared Core Composition](docs/adr/ADR-001-shared-core-composition.md)
 - [ADR-002 – Open Core Vocabulary](docs/adr/ADR-002-open-core-vocabulary.md)
 - [ADR-003 – Transactional Lightweight Activity History](docs/adr/ADR-003-transactional-lightweight-activity-history.md)
