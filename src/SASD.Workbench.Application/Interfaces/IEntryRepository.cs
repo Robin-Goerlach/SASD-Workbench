@@ -1,3 +1,4 @@
+using SASD.Workbench.Application.Models;
 using SASD.Workbench.Domain.Entities;
 
 namespace SASD.Workbench.Application.Interfaces;
@@ -8,10 +9,8 @@ namespace SASD.Workbench.Application.Interfaces;
 public interface IEntryRepository
 {
     Task<Entry?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-
     Task<IReadOnlyList<Entry>> ListByProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
-
+    Task<IReadOnlyList<Entry>> SearchAsync(EntrySearchQuery query, CancellationToken cancellationToken = default);
     Task AddAsync(Entry entry, CancellationToken cancellationToken = default);
-
     Task UpdateAsync(Entry entry, CancellationToken cancellationToken = default);
 }
