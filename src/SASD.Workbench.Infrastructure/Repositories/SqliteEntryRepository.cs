@@ -1,6 +1,6 @@
-using System.Data;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using SASD.Workbench.Application.Exceptions;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Models;
 using SASD.Workbench.Domain.Entities;
@@ -151,12 +151,17 @@ public sealed class SqliteEntryRepository : IEntryRepository
             WHERE id = $id AND version = $previousVersion;
             """;
         AddParameters(command, entry);
-        command.Parameters.AddWithValue("$previousVersion", entry.Version - 1);
+        var expectedVersion = entry.Version - 1;
+        command.Parameters.AddWithValue("$previousVersion", expectedVersion);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (rows != 1)
         {
-            throw new DBConcurrencyException($"Entry '{entry.Id}' was changed or removed by another operation.");
+            // The Application service validates the caller's observed version before mutation, but a
+            // competing writer can still commit after that read and before this UPDATE. Preserve the
+            // same host-facing concurrency semantic for this lower-level race instead of leaking a
+            // provider-specific DBConcurrencyException through the Application boundary.
+            throw new OptimisticConcurrencyException(nameof(Entry), entry.Id, expectedVersion);
         }
 
         var actionType = entry.IsDeleted
