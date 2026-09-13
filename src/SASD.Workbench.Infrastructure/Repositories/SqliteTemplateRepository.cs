@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -12,9 +14,13 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 public sealed class SqliteTemplateRepository : ITemplateRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteTemplateRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteTemplateRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<Template?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -61,7 +67,9 @@ public sealed class SqliteTemplateRepository : ITemplateRepository
     {
         ArgumentNullException.ThrowIfNull(template);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO templates
                 (id, project_id, profile_key, name, description, entry_type, default_status,
@@ -72,13 +80,26 @@ public sealed class SqliteTemplateRepository : ITemplateRepository
             """;
         AddParameters(command, template);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.TemplateCreated,
+            $"Created template '{template.Name}' for entry type '{template.EntryType}'.",
+            projectId: template.ProjectId,
+            newValue: template.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(Template template, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(template);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             UPDATE templates
             SET project_id = $projectId, profile_key = $profileKey, name = $name,
@@ -93,6 +114,18 @@ public sealed class SqliteTemplateRepository : ITemplateRepository
         {
             throw new InvalidOperationException($"Template '{template.Id}' does not exist.");
         }
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            template.IsDeleted ? CoreActivityTypes.TemplateDeleted : CoreActivityTypes.TemplateUpdated,
+            $"Persisted template '{template.Name}' for entry type '{template.EntryType}'.",
+            projectId: template.ProjectId,
+            newValue: template.IsDeleted ? null : template.Id.ToString("D"),
+            oldValue: template.IsDeleted ? template.Id.ToString("D") : null,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     private static void AddParameters(SqliteCommand command, Template template)
