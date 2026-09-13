@@ -56,7 +56,11 @@ public sealed class SqliteEntryRepository : IEntryRepository
         var result = new List<Entry>();
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = SelectColumns + """
+
+        // Keep an explicit separator between the reusable SELECT clause and the raw WHERE clause.
+        // Raw string literals do not implicitly add a leading newline, so omitting this separator
+        // would produce invalid SQL such as "FROM entries eWHERE ...".
+        command.CommandText = SelectColumns + "\n" + """
             WHERE e.is_deleted = 0
               AND ($projectId IS NULL OR e.project_id = $projectId)
               AND ($entryType IS NULL OR e.entry_type = $entryType)
