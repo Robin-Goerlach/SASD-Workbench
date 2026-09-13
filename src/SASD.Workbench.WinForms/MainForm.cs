@@ -1,16 +1,29 @@
+using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Services;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
 using SASD.Workbench.Infrastructure.Configuration;
 
 namespace SASD.Workbench.WinForms;
 
 /// <summary>
-/// Provides the deliberately small V0.1 desktop shell used to prove the complete core flow.
+/// Hosts the common V1 desktop workflow and delegates focused Core tools to separate dialogs.
 /// </summary>
+/// <remarks>
+/// This form intentionally remains a UI coordinator. Search, collections, relations and activity
+/// have their own dialogs; persistence, export and backup rules remain below the WinForms layer.
+/// </remarks>
 public sealed class MainForm : Form
 {
     private readonly ProjectService _projectService;
     private readonly EntryService _entryService;
+    private readonly SearchService _searchService;
+    private readonly CollectionService _collectionService;
+    private readonly EntryLinkService _entryLinkService;
+    private readonly ActivityLogService _activityLogService;
+    private readonly IProjectExportService _exportService;
+    private readonly IBackupService _backupService;
+    private readonly WorkbenchDataPaths _paths;
 
     private readonly ListBox _projectList = new();
     private readonly ListBox _entryList = new();
@@ -23,13 +36,36 @@ public sealed class MainForm : Form
     private readonly Button _newEntryButton = new();
     private readonly Label _statusLabel = new();
 
+    private readonly ToolStripButton _searchButton = new("Search");
+    private readonly ToolStripButton _collectionsButton = new("Collections");
+    private readonly ToolStripButton _relationsButton = new("Relations");
+    private readonly ToolStripButton _activityButton = new("Activity");
+    private readonly ToolStripButton _exportButton = new("Export Markdown");
+    private readonly ToolStripButton _backupButton = new("Backup");
+    private readonly ToolStripButton _restoreButton = new("Restore");
+
     private bool _loadingSelection;
 
-    public MainForm(ProjectService projectService, EntryService entryService, WorkbenchDataPaths paths)
+    public MainForm(
+        ProjectService projectService,
+        EntryService entryService,
+        SearchService searchService,
+        CollectionService collectionService,
+        EntryLinkService entryLinkService,
+        ActivityLogService activityLogService,
+        IProjectExportService exportService,
+        IBackupService backupService,
+        WorkbenchDataPaths paths)
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
-        ArgumentNullException.ThrowIfNull(paths);
+        _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
+        _collectionService = collectionService ?? throw new ArgumentNullException(nameof(collectionService));
+        _entryLinkService = entryLinkService ?? throw new ArgumentNullException(nameof(entryLinkService));
+        _activityLogService = activityLogService ?? throw new ArgumentNullException(nameof(activityLogService));
+        _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
+        _backupService = backupService ?? throw new ArgumentNullException(nameof(backupService));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
 
         Text = "SASD Workbench";
         StartPosition = FormStartPosition.CenterScreen;
@@ -38,11 +74,22 @@ public sealed class MainForm : Form
         Height = 850;
 
         BuildLayout(paths.DatabasePath);
+        UpdateToolAvailability();
         Shown += MainForm_Shown;
     }
 
     private void BuildLayout(string databasePath)
     {
+        var shell = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        shell.Controls.Add(BuildToolStrip(), 0, 0);
+
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -66,7 +113,40 @@ public sealed class MainForm : Form
         root.Controls.Add(_statusLabel, 0, 1);
         root.SetColumnSpan(_statusLabel, 3);
 
-        Controls.Add(root);
+        shell.Controls.Add(root, 0, 1);
+        Controls.Add(shell);
+    }
+
+    private ToolStrip BuildToolStrip()
+    {
+        var toolStrip = new ToolStrip
+        {
+            GripStyle = ToolStripGripStyle.Hidden,
+            Dock = DockStyle.Fill,
+            AutoSize = true
+        };
+
+        _searchButton.Click += SearchButton_Click;
+        _collectionsButton.Click += CollectionsButton_Click;
+        _relationsButton.Click += RelationsButton_Click;
+        _activityButton.Click += ActivityButton_Click;
+        _exportButton.Click += ExportButton_Click;
+        _backupButton.Click += BackupButton_Click;
+        _restoreButton.Click += RestoreButton_Click;
+
+        toolStrip.Items.AddRange(
+        [
+            _searchButton,
+            _collectionsButton,
+            _relationsButton,
+            _activityButton,
+            new ToolStripSeparator(),
+            _exportButton,
+            new ToolStripSeparator(),
+            _backupButton,
+            _restoreButton
+        ]);
+        return toolStrip;
     }
 
     private Control BuildProjectPanel()
@@ -180,10 +260,10 @@ public sealed class MainForm : Form
     }
 
     private async void MainForm_Shown(object? sender, EventArgs e)
-        => await ReloadProjectsAsync();
+        => await ReloadProjectsAsync().ConfigureAwait(true);
 
     private async void RefreshButton_Click(object? sender, EventArgs e)
-        => await ReloadProjectsAsync();
+        => await ReloadProjectsAsync().ConfigureAwait(true);
 
     private async void NewProjectButton_Click(object? sender, EventArgs e)
     {
@@ -195,8 +275,8 @@ public sealed class MainForm : Form
 
         try
         {
-            var project = await _projectService.CreateAsync(dialog.ProjectName, dialog.ProjectDescription);
-            await ReloadProjectsAsync(project.Id);
+            var project = await _projectService.CreateAsync(dialog.ProjectName, dialog.ProjectDescription).ConfigureAwait(true);
+            await ReloadProjectsAsync(project.Id).ConfigureAwait(true);
             SetStatus($"Project '{project.Name}' created.");
         }
         catch (Exception ex)
@@ -217,14 +297,16 @@ public sealed class MainForm : Form
             _entryList.DataSource = null;
             _newEntryButton.Enabled = false;
             ClearEditor();
+            UpdateToolAvailability();
             return;
         }
 
         _newEntryButton.Enabled = true;
-        await ReloadEntriesAsync(project.Id);
+        await ReloadEntriesAsync(project.Id).ConfigureAwait(true);
+        UpdateToolAvailability();
     }
 
-    private async void EntryList_SelectedIndexChanged(object? sender, EventArgs e)
+    private void EntryList_SelectedIndexChanged(object? sender, EventArgs e)
     {
         if (_loadingSelection)
         {
@@ -234,11 +316,12 @@ public sealed class MainForm : Form
         if (_entryList.SelectedItem is not Entry entry)
         {
             ClearEditor();
+            UpdateToolAvailability();
             return;
         }
 
         PopulateEditor(entry);
-        await Task.CompletedTask;
+        UpdateToolAvailability();
     }
 
     private async void NewEntryButton_Click(object? sender, EventArgs e)
@@ -250,8 +333,12 @@ public sealed class MainForm : Form
 
         try
         {
-            var entry = await _entryService.CreateAsync(project.Id, "note", "New entry", contentMarkdown: "# New entry\r\n");
-            await ReloadEntriesAsync(project.Id, entry.Id);
+            var entry = await _entryService.CreateAsync(
+                project.Id,
+                CoreEntryTypes.Note,
+                "New entry",
+                contentMarkdown: "# New entry\r\n").ConfigureAwait(true);
+            await ReloadEntriesAsync(project.Id, entry.Id).ConfigureAwait(true);
             SetStatus("New entry created. Edit it on the right and save your changes.");
         }
         catch (Exception ex)
@@ -275,9 +362,9 @@ public sealed class MainForm : Form
                 _summaryTextBox.Text,
                 _contentTextBox.Text,
                 _typeTextBox.Text,
-                _statusTextBox.Text);
+                _statusTextBox.Text).ConfigureAwait(true);
 
-            await ReloadEntriesAsync(saved.ProjectId, saved.Id);
+            await ReloadEntriesAsync(saved.ProjectId, saved.Id).ConfigureAwait(true);
             SetStatus($"Entry saved at {saved.UpdatedAtUtc.ToLocalTime():G}.");
         }
         catch (Exception ex)
@@ -286,12 +373,186 @@ public sealed class MainForm : Form
         }
     }
 
+    private void SearchButton_Click(object? sender, EventArgs e)
+    {
+        if (_projectList.SelectedItem is not Project project)
+        {
+            return;
+        }
+
+        using var dialog = new SearchDialog(_searchService, project.Id);
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.SelectedEntry is Entry selected)
+        {
+            _ = ReloadEntriesFromDialogAsync(project.Id, selected.Id);
+        }
+    }
+
+    private void CollectionsButton_Click(object? sender, EventArgs e)
+    {
+        if (_projectList.SelectedItem is not Project project)
+        {
+            return;
+        }
+
+        using var dialog = new CollectionsDialog(_collectionService, project.Id, _entryList.SelectedItem as Entry);
+        dialog.ShowDialog(this);
+    }
+
+    private void RelationsButton_Click(object? sender, EventArgs e)
+    {
+        if (_entryList.SelectedItem is not Entry entry)
+        {
+            return;
+        }
+
+        using var dialog = new RelationsDialog(_entryLinkService, _entryService, entry);
+        dialog.ShowDialog(this);
+    }
+
+    private void ActivityButton_Click(object? sender, EventArgs e)
+    {
+        if (_projectList.SelectedItem is not Project project)
+        {
+            return;
+        }
+
+        var entryId = (_entryList.SelectedItem as Entry)?.Id;
+        using var dialog = new ActivityLogDialog(_activityLogService, project.Id, entryId);
+        dialog.ShowDialog(this);
+    }
+
+    private async void ExportButton_Click(object? sender, EventArgs e)
+    {
+        if (_projectList.SelectedItem is not Project project)
+        {
+            return;
+        }
+
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose the parent directory for the portable Markdown project export.",
+            ShowNewFolderButton = true,
+            SelectedPath = Directory.Exists(_paths.ExportsDirectory) ? _paths.ExportsDirectory : _paths.RootDirectory
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _exportService.ExportMarkdownAsync(project.Id, dialog.SelectedPath).ConfigureAwait(true);
+            SetStatus($"Project exported to {result.ExportDirectory}");
+            MessageBox.Show(
+                this,
+                $"Export completed.\n\nEntries: {result.EntryCount}\nAttachments: {result.AttachmentCount}\n\n{result.ExportDirectory}",
+                "SASD Workbench",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowError("The project export failed.", ex);
+        }
+    }
+
+    private async void BackupButton_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose the directory for the full Workbench backup archive.",
+            ShowNewFolderButton = true,
+            SelectedPath = Directory.Exists(_paths.BackupsDirectory) ? _paths.BackupsDirectory : _paths.RootDirectory
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _backupService.CreateBackupAsync(dialog.SelectedPath).ConfigureAwait(true);
+            SetStatus($"Backup created: {result.ArchivePath}");
+            MessageBox.Show(
+                this,
+                $"Full backup created successfully.\n\n{result.ArchivePath}",
+                "SASD Workbench",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowError("The full backup failed.", ex);
+        }
+    }
+
+    private async void RestoreButton_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Restore SASD Workbench backup",
+            Filter = "SASD Workbench backup (*.zip)|*.zip|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+            InitialDirectory = Directory.Exists(_paths.BackupsDirectory) ? _paths.BackupsDirectory : _paths.RootDirectory
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this,
+            "Restore replaces the current Workbench database and attachment store with the selected backup.\n\nA safety backup of the current state is created first when possible. Continue?",
+            "Restore Workbench backup",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            Enabled = false;
+            var result = await _backupService.RestoreBackupAsync(dialog.FileName).ConfigureAwait(true);
+            Enabled = true;
+            UseWaitCursor = false;
+            await ReloadProjectsAsync().ConfigureAwait(true);
+            SetStatus($"Backup restored from {result.ArchivePath}");
+
+            var safetyText = string.IsNullOrWhiteSpace(result.SafetyBackupPath)
+                ? "No previous database state required a safety backup."
+                : $"Safety backup of replaced state:\n{result.SafetyBackupPath}";
+            MessageBox.Show(
+                this,
+                $"Restore completed successfully.\n\n{safetyText}",
+                "SASD Workbench",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Enabled = true;
+            UseWaitCursor = false;
+            ShowError("The restore failed. The restore service attempted to preserve or roll back the previous state.", ex);
+        }
+    }
+
+    private async Task ReloadEntriesFromDialogAsync(Guid projectId, Guid entryId)
+    {
+        await ReloadEntriesAsync(projectId, entryId).ConfigureAwait(true);
+        SetStatus("Search result opened.");
+    }
+
     private async Task ReloadProjectsAsync(Guid? selectProjectId = null)
     {
         try
         {
             var previousId = selectProjectId ?? (_projectList.SelectedItem as Project)?.Id;
-            var projects = await _projectService.ListAsync();
+            var projects = await _projectService.ListAsync().ConfigureAwait(true);
 
             _loadingSelection = true;
             _projectList.DataSource = projects.ToList();
@@ -302,7 +563,7 @@ public sealed class MainForm : Form
             if (_projectList.SelectedItem is Project project)
             {
                 _newEntryButton.Enabled = true;
-                await ReloadEntriesAsync(project.Id);
+                await ReloadEntriesAsync(project.Id).ConfigureAwait(true);
             }
             else
             {
@@ -310,10 +571,13 @@ public sealed class MainForm : Form
                 _newEntryButton.Enabled = false;
                 ClearEditor();
             }
+
+            UpdateToolAvailability();
         }
         catch (Exception ex)
         {
             _loadingSelection = false;
+            UpdateToolAvailability();
             ShowError("Projects could not be loaded.", ex);
         }
     }
@@ -323,7 +587,7 @@ public sealed class MainForm : Form
         try
         {
             var previousId = selectEntryId ?? (_entryList.SelectedItem as Entry)?.Id;
-            var entries = await _entryService.ListByProjectAsync(projectId);
+            var entries = await _entryService.ListByProjectAsync(projectId).ConfigureAwait(true);
 
             _loadingSelection = true;
             _entryList.DataSource = entries.ToList();
@@ -339,10 +603,13 @@ public sealed class MainForm : Form
             {
                 ClearEditor();
             }
+
+            UpdateToolAvailability();
         }
         catch (Exception ex)
         {
             _loadingSelection = false;
+            UpdateToolAvailability();
             ShowError("Entries could not be loaded.", ex);
         }
     }
@@ -395,6 +662,19 @@ public sealed class MainForm : Form
         _statusTextBox.Enabled = enabled;
         _contentTextBox.Enabled = enabled;
         _saveEntryButton.Enabled = enabled;
+    }
+
+    private void UpdateToolAvailability()
+    {
+        var hasProject = _projectList.SelectedItem is Project;
+        var hasEntry = _entryList.SelectedItem is Entry;
+        _searchButton.Enabled = hasProject;
+        _collectionsButton.Enabled = hasProject;
+        _relationsButton.Enabled = hasEntry;
+        _activityButton.Enabled = hasProject;
+        _exportButton.Enabled = hasProject;
+        _backupButton.Enabled = true;
+        _restoreButton.Enabled = true;
     }
 
     private void SetStatus(string message) => _statusLabel.Text = message;
