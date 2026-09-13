@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Application.Models;
@@ -72,6 +73,11 @@ internal static class Program
             AssertThrows<ArgumentException>(
                 () => EntryRelationTypes.Normalize("invalid relation"),
                 "Relation keys containing spaces must be rejected.");
+
+            // Force the activity insert to fail once and prove that the primary project insert rolls
+            // back with it. This protects the central invariant of the V1 lightweight history: for
+            // SQLite-backed Core mutations, persisted state and its automatic activity record are atomic.
+            await VerifyActivityFailureRollsBackMutationAsync(projectService, connections);
 
             var project = await projectService.CreateAsync("Core smoke test", "Persistence round-trip", "general");
             Assert(project.Version == 1, "A new project must start at version 1.");
@@ -159,7 +165,14 @@ internal static class Program
                 templatedEntry.Id,
                 newValue: "ok");
             var activity = await activityService.ListAsync(project.Id);
-            Assert(activity.Count == 1 && activity[0].ActionType == "smoke_test", "Activity log round-trip failed.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.ProjectCreated), "Automatic project creation activity is missing.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.ProjectUpdated), "Automatic project update activity is missing.");
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.EntryCreated) == 2, "Each persisted entry creation must create one activity record.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.EntryUpdated), "Automatic entry update activity is missing.");
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.TagAttached) == 1, "Idempotent repeated tag assignment must not create duplicate activity.");
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.CollectionEntryAdded) == 2, "Collection membership activities are incomplete.");
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.RelationCreated) == 2, "Relation creation activities are incomplete.");
+            Assert(activity.Any(item => item.ActionType == "smoke_test"), "Explicit activity recording round-trip failed.");
 
             var sourcePath = Path.Combine(root, "source-attachment.txt");
             const string sourceContent = "SASD Workbench controlled attachment smoke test.";
@@ -172,6 +185,9 @@ internal static class Program
             var storedPath = Path.Combine(paths.AttachmentsDirectory, attachment.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             Assert(File.Exists(storedPath), "Attachment was not copied into controlled storage.");
             Assert(await File.ReadAllTextAsync(storedPath) == sourceContent, "Stored attachment content differs from the source.");
+
+            activity = await activityService.ListAsync(project.Id);
+            Assert(activity.Count(item => item.ActionType == CoreActivityTypes.AttachmentAdded) == 1, "Attachment metadata activity is missing.");
 
             var textSearch = await searchService.SearchAsync(new EntrySearchQuery(Text: "AlphaBeta", ProjectId: project.Id));
             Assert(textSearch.Count == 1 && textSearch[0].Id == entry.Id, "Text search did not find content Markdown.");
@@ -203,6 +219,10 @@ internal static class Program
             Assert((await projectService.ListAsync()).Count == 2, "Post-backup mutation setup failed.");
             Assert(!File.Exists(storedPath), "Physical attachment deletion setup failed.");
 
+            activity = await activityService.ListAsync(project.Id);
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.EntryDeleted), "Post-backup entry deletion activity is missing.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentDeleted), "Post-backup attachment deletion activity is missing.");
+
             clock.Advance(TimeSpan.FromMinutes(1));
             var restore = await backupService.RestoreBackupAsync(backup.ArchivePath);
             Assert(!string.IsNullOrWhiteSpace(restore.SafetyBackupPath) && File.Exists(restore.SafetyBackupPath), "Restore did not create a safety backup of the replaced state.");
@@ -216,6 +236,13 @@ internal static class Program
             Assert(restoredAttachments.Count == 1 && restoredAttachments[0].Id == attachment.Id, "Restored attachment metadata is incorrect.");
             Assert(File.Exists(storedPath), "Restore did not restore the physical attachment.");
             Assert(await File.ReadAllTextAsync(storedPath) == sourceContent, "Restored attachment content is incorrect.");
+
+            // Activity history is part of the backed-up database state. The post-backup delete records
+            // must disappear after restore just like the mutations they described.
+            activity = await activityService.ListAsync(project.Id);
+            Assert(!activity.Any(item => item.ActionType == CoreActivityTypes.EntryDeleted), "Restore kept activity that occurred only after the backup.");
+            Assert(!activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentDeleted), "Restore kept attachment activity that occurred only after the backup.");
+            Assert(activity.Any(item => item.ActionType == CoreActivityTypes.AttachmentAdded), "Restore lost pre-backup activity history.");
 
             await VerifyMigrationCountAsync(connections, expectedCount: 3);
 
@@ -232,6 +259,47 @@ internal static class Program
         {
             TryDeleteDirectory(root);
         }
+    }
+
+    private static async Task VerifyActivityFailureRollsBackMutationAsync(
+        ProjectService projectService,
+        SqliteConnectionFactory connections)
+    {
+        const string triggerName = "smoke_force_activity_failure";
+        await ExecuteSqlAsync(
+            connections,
+            $"""
+            CREATE TRIGGER {triggerName}
+            BEFORE INSERT ON activity_log
+            BEGIN
+                SELECT RAISE(ABORT, 'forced activity failure');
+            END;
+            """);
+
+        var failedAsExpected = false;
+        try
+        {
+            await projectService.CreateAsync("Must roll back");
+        }
+        catch (SqliteException)
+        {
+            failedAsExpected = true;
+        }
+        finally
+        {
+            await ExecuteSqlAsync(connections, $"DROP TRIGGER IF EXISTS {triggerName};");
+        }
+
+        Assert(failedAsExpected, "Forced activity failure did not fail the enclosing mutation.");
+        Assert((await projectService.ListAsync()).Count == 0, "Primary mutation was not rolled back when activity recording failed.");
+    }
+
+    private static async Task ExecuteSqlAsync(SqliteConnectionFactory connections, string sql)
+    {
+        await using var connection = await connections.OpenConnectionAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task VerifyMigrationCountAsync(SqliteConnectionFactory connections, long expectedCount)
