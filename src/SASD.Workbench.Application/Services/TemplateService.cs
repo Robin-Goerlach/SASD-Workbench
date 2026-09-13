@@ -102,12 +102,22 @@ public sealed class TemplateService
     /// <summary>
     /// Soft-deletes a user-managed template without changing entries previously created from it.
     /// </summary>
+    /// <remarks>
+    /// System templates are owned by the Core/profile installation lifecycle rather than by ordinary
+    /// user content management. A future controlled template installer may retire or replace them, but
+    /// the normal delete use-case must not allow a host UI to remove a canonical system definition.
+    /// </remarks>
     public async Task DeleteAsync(Guid templateId, CancellationToken cancellationToken = default)
     {
         var template = await _templates.GetByIdAsync(templateId, cancellationToken).ConfigureAwait(false);
         if (template is null || template.IsDeleted)
         {
             return;
+        }
+
+        if (template.IsSystemTemplate)
+        {
+            throw new InvalidOperationException("System templates cannot be deleted through normal content management.");
         }
 
         template.Delete(_clock.UtcNow);
