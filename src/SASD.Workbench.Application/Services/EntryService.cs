@@ -1,3 +1,4 @@
+using SASD.Workbench.Application.Exceptions;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
 
@@ -47,8 +48,18 @@ public sealed class EntryService
         return entry;
     }
 
+    /// <summary>
+    /// Updates an entry only when the caller still owns the version it originally loaded.
+    /// </summary>
+    /// <remarks>
+    /// Re-reading an entry and silently applying stale editor fields to the newest version would defeat
+    /// optimistic concurrency: an older editor could overwrite a newer save. The expected version is
+    /// therefore part of the use-case contract. The repository repeats the check in SQL to close the
+    /// race between this read and the conditional UPDATE.
+    /// </remarks>
     public async Task<Entry> UpdateAsync(
         Guid id,
+        long expectedVersion,
         string title,
         string? summary,
         string? contentMarkdown,
@@ -57,6 +68,8 @@ public sealed class EntryService
         CancellationToken cancellationToken = default)
     {
         var entry = await RequireEntryAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(entry, expectedVersion);
+
         entry.Update(
             title,
             summary,
@@ -69,16 +82,24 @@ public sealed class EntryService
         return entry;
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Archives an entry only if the caller's previously observed version is still current.
+    /// </summary>
+    public async Task ArchiveAsync(Guid id, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var entry = await RequireEntryAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(entry, expectedVersion);
         entry.Archive(_clock.UtcNow);
         await _entries.UpdateAsync(entry, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Soft-deletes an entry only if the caller's previously observed version is still current.
+    /// </summary>
+    public async Task DeleteAsync(Guid id, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var entry = await RequireEntryAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(entry, expectedVersion);
         entry.Delete(_clock.UtcNow);
         await _entries.UpdateAsync(entry, cancellationToken).ConfigureAwait(false);
     }
@@ -92,5 +113,22 @@ public sealed class EntryService
         }
 
         return entry;
+    }
+
+    private static void EnsureExpectedVersion(Entry entry, long expectedVersion)
+    {
+        if (expectedVersion < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedVersion), "Expected version must be at least 1.");
+        }
+
+        if (entry.Version != expectedVersion)
+        {
+            throw new OptimisticConcurrencyException(
+                nameof(Entry),
+                entry.Id,
+                expectedVersion,
+                entry.Version);
+        }
     }
 }
