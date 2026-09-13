@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -12,9 +14,13 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 public sealed class SqliteTagRepository : ITagRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteTagRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteTagRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<Tag?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -78,20 +84,34 @@ public sealed class SqliteTagRepository : ITagRepository
     {
         ArgumentNullException.ThrowIfNull(tag);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO tags(id, name, normalized_name, color, created_at, updated_at, is_deleted)
             VALUES ($id, $name, $normalizedName, $color, $createdAt, $updatedAt, $isDeleted);
             """;
         AddParameters(command, tag);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.TagCreated,
+            $"Created tag '{tag.Name}'.",
+            newValue: tag.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(Tag tag, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tag);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             UPDATE tags
             SET name = $name, normalized_name = $normalizedName, color = $color,
@@ -104,27 +124,75 @@ public sealed class SqliteTagRepository : ITagRepository
         {
             throw new InvalidOperationException($"Tag '{tag.Id}' does not exist.");
         }
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            tag.IsDeleted ? CoreActivityTypes.TagDeleted : CoreActivityTypes.TagUpdated,
+            $"Persisted tag '{tag.Name}'.",
+            newValue: tag.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task AttachToEntryAsync(Guid entryId, Guid tagId, DateTime createdAtUtc, CancellationToken cancellationToken = default)
     {
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "INSERT OR IGNORE INTO entry_tags(entry_id, tag_id, created_at) VALUES ($entryId, $tagId, $createdAt);";
         command.Parameters.AddWithValue("$entryId", entryId.ToString("D"));
         command.Parameters.AddWithValue("$tagId", tagId.ToString("D"));
         command.Parameters.AddWithValue("$createdAt", FormatUtc(createdAtUtc));
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (rows == 1)
+        {
+            var projectId = await _activity.RequireProjectIdForEntryAsync(
+                connection, transaction, entryId, cancellationToken).ConfigureAwait(false);
+            await _activity.WriteAsync(
+                connection,
+                transaction,
+                CoreActivityTypes.TagAttached,
+                $"Attached tag '{tagId:D}' to entry '{entryId:D}'.",
+                projectId: projectId,
+                entryId: entryId,
+                newValue: tagId.ToString("D"),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        transaction.Commit();
     }
 
     public async Task DetachFromEntryAsync(Guid entryId, Guid tagId, CancellationToken cancellationToken = default)
     {
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "DELETE FROM entry_tags WHERE entry_id = $entryId AND tag_id = $tagId;";
         command.Parameters.AddWithValue("$entryId", entryId.ToString("D"));
         command.Parameters.AddWithValue("$tagId", tagId.ToString("D"));
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (rows == 1)
+        {
+            var projectId = await _activity.RequireProjectIdForEntryAsync(
+                connection, transaction, entryId, cancellationToken).ConfigureAwait(false);
+            await _activity.WriteAsync(
+                connection,
+                transaction,
+                CoreActivityTypes.TagDetached,
+                $"Detached tag '{tagId:D}' from entry '{entryId:D}'.",
+                projectId: projectId,
+                entryId: entryId,
+                oldValue: tagId.ToString("D"),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        transaction.Commit();
     }
 
     private static void AddParameters(SqliteCommand command, Tag tag)
