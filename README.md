@@ -67,10 +67,11 @@ The current codebase contains the common local V1 backend and desktop integratio
 - focused WinForms dialogs for templates, tags, attachments, search, collections, relations and activity
 - desktop commands for export, backup and restore
 - explicit isolated desktop data roots for acceptance tests and experiments
+- dedicated stale-editor guidance that preserves unsaved Entry text until the user consciously reloads/merges
 
 For SQLite-backed mutations, the primary data change and its automatic activity record share one database transaction. Idempotent no-op assignments do not create duplicate history. This remains a lightweight chronological history, **not** a tamper-evident regulatory audit trail. Attachment file bytes remain outside the SQLite transaction; their metadata and activity record are transactional while the Application service uses compensating cleanup if a new file cannot be persisted successfully.
 
-Project and Entry saves use two-stage optimistic concurrency. The Application service compares the version observed by the caller with the currently persisted entity; SQLite then repeats the version predicate atomically during the update to close the remaining race. A stale desktop editor is rejected instead of silently overwriting a newer save.
+Project and Entry saves use two-stage optimistic concurrency. The Application service compares the version observed by the caller with the currently persisted entity; SQLite then repeats the version predicate atomically during the update to close the remaining race. A stale desktop editor is rejected instead of silently overwriting a newer save. The WinForms host deliberately leaves the unsaved editor fields untouched on such a conflict and explains how to preserve, reload and merge them safely rather than automatically retrying stale data.
 
 The attachment desktop workflow deliberately does not open stored files directly yet. This keeps controlled-path resolution out of WinForms until a reusable and security-reviewed open/reveal capability exists in the common Application/Infrastructure boundary.
 
@@ -213,6 +214,8 @@ Core project documentation:
 - [060 – Developer Guide](docs/060_Developer_Guide.md)
 - [070 – Test Strategy](docs/070_Test_Strategy.md)
 - [080 – V1 Internal Acceptance Test](docs/080_V1_Internal_Acceptance_Test.md)
+- [085 – V1 Concurrency Conflict UX](docs/085_V1_Concurrency_Conflict_UX.md)
+- [086 – V1 Manual Acceptance Findings](docs/086_V1_Manual_Acceptance_Findings.md)
 - [ADR-001 – Shared Core Composition](docs/adr/ADR-001-shared-core-composition.md)
 - [ADR-002 – Open Core Vocabulary](docs/adr/ADR-002-open-core-vocabulary.md)
 - [ADR-003 – Transactional Lightweight Activity History](docs/adr/ADR-003-transactional-lightweight-activity-history.md)
@@ -221,7 +224,7 @@ Core project documentation:
 
 `045_Cross_Cutting_Features.md` captures reusable capabilities discovered in later specialist-project discussions. ADRs record architecture decisions that should remain stable across future SASD Workbench products.
 
-The V1 internal acceptance checklist is prepared but must still be executed on a real Windows desktop; CI does not pretend to replace human UX/recovery validation.
+The V1 internal acceptance checklist is prepared but must still be executed on a real Windows desktop; CI does not pretend to replace human UX/recovery validation. Findings from that real pass belong in `086_V1_Manual_Acceptance_Findings.md`; the file is intentionally empty of invented test outcomes until the pass is actually performed.
 
 ---
 
