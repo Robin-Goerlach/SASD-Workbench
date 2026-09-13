@@ -99,6 +99,21 @@ public sealed class TemplateService
         return entry;
     }
 
+    /// <summary>
+    /// Soft-deletes a user-managed template without changing entries previously created from it.
+    /// </summary>
+    public async Task DeleteAsync(Guid templateId, CancellationToken cancellationToken = default)
+    {
+        var template = await _templates.GetByIdAsync(templateId, cancellationToken).ConfigureAwait(false);
+        if (template is null || template.IsDeleted)
+        {
+            return;
+        }
+
+        template.Delete(_clock.UtcNow);
+        await _templates.UpdateAsync(template, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<Project> RequireProjectAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var project = await _projects.GetByIdAsync(projectId, cancellationToken).ConfigureAwait(false);
