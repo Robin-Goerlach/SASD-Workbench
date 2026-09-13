@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -12,9 +14,13 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 public sealed class SqliteEntryLinkRepository : IEntryLinkRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteEntryLinkRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteEntryLinkRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<EntryLink?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -45,20 +51,39 @@ public sealed class SqliteEntryLinkRepository : IEntryLinkRepository
     {
         ArgumentNullException.ThrowIfNull(link);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO entry_links(id, source_entry_id, target_entry_id, relation_type, comment, created_at, created_by, is_deleted)
             VALUES ($id, $sourceId, $targetId, $relationType, $comment, $createdAt, $createdBy, $isDeleted);
             """;
         AddParameters(command, link);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        var projectId = await _activity.RequireProjectIdForEntryAsync(
+            connection, transaction, link.SourceEntryId, cancellationToken).ConfigureAwait(false);
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.RelationCreated,
+            $"Created relation '{link.RelationType}' from '{link.SourceEntryId:D}' to '{link.TargetEntryId:D}'.",
+            projectId: projectId,
+            entryId: link.SourceEntryId,
+            newValue: link.Id.ToString("D"),
+            createdBy: link.CreatedBy,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(EntryLink link, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(link);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "UPDATE entry_links SET is_deleted = $isDeleted WHERE id = $id;";
         AddParameters(command, link);
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -66,6 +91,24 @@ public sealed class SqliteEntryLinkRepository : IEntryLinkRepository
         {
             throw new InvalidOperationException($"Entry link '{link.Id}' does not exist.");
         }
+
+        var projectId = await _activity.RequireProjectIdForEntryAsync(
+            connection, transaction, link.SourceEntryId, cancellationToken).ConfigureAwait(false);
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            link.IsDeleted ? CoreActivityTypes.RelationDeleted : CoreActivityTypes.RelationCreated,
+            link.IsDeleted
+                ? $"Deleted relation '{link.RelationType}' from '{link.SourceEntryId:D}' to '{link.TargetEntryId:D}'."
+                : $"Persisted relation '{link.RelationType}' from '{link.SourceEntryId:D}' to '{link.TargetEntryId:D}'.",
+            projectId: projectId,
+            entryId: link.SourceEntryId,
+            oldValue: link.IsDeleted ? link.Id.ToString("D") : null,
+            newValue: link.IsDeleted ? null : link.Id.ToString("D"),
+            createdBy: link.CreatedBy,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     private const string SelectColumns = """
