@@ -4,7 +4,7 @@ using SASD.Workbench.Domain.Entities;
 namespace SASD.Workbench.WinForms;
 
 /// <summary>
-/// Provides the V1 attachment workflow while keeping controlled storage rules in AttachmentService.
+/// Provides the V1 attachment workflow while keeping controlled storage rules in <see cref="AttachmentService"/>.
 /// </summary>
 internal sealed class AttachmentsDialog : Form
 {
@@ -209,10 +209,10 @@ internal sealed class AttachmentsDialog : Form
 
     private async Task ReloadAsync(Guid? selectAttachmentId = null)
     {
+        _attachmentList.BeginUpdate();
         try
         {
             var attachments = await _attachmentService.ListByEntryAsync(_entry.Id).ConfigureAwait(true);
-            _attachmentList.BeginUpdate();
             _attachmentList.Items.Clear();
 
             ListViewItem? itemToSelect = null;
@@ -233,7 +233,6 @@ internal sealed class AttachmentsDialog : Form
                 }
             }
 
-            _attachmentList.EndUpdate();
             if (itemToSelect is not null)
             {
                 itemToSelect.Selected = true;
@@ -250,8 +249,13 @@ internal sealed class AttachmentsDialog : Form
         }
         catch (Exception ex)
         {
-            _attachmentList.EndUpdate();
             ShowError("Attachments could not be loaded.", ex);
+        }
+        finally
+        {
+            // Balance every BeginUpdate call, including exceptional paths. Leaving the control in an
+            // update-suppressed state would turn a recoverable loading error into a visually frozen list.
+            _attachmentList.EndUpdate();
         }
     }
 
