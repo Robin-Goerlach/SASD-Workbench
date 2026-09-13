@@ -31,7 +31,6 @@ internal static class Program
             paths.EnsureDirectories();
 
             var services = new ServiceCollection();
-            services.AddSingleton(startupOptions);
             services.AddSasdWorkbenchCore(paths);
             services.AddSingleton<MainForm>();
 
