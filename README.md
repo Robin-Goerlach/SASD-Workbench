@@ -2,9 +2,9 @@
 
 **SASD Workbench** is a local, modular desktop application and shared codebase for structured project, research and engineering documentation.
 
-The current development focuses on a robust offline core: projects, entries, templates, attachments, tags, collections, typed relations, search, export and backups. Later versions add cross-cutting capabilities such as research questions, sources, timelines, reusable resources, annotations, structured data and context snapshots. Specialized SASD Workbench applications can then build on the same core for lab work, software engineering, Linux administration, prompt experiments, biblical research, recipes and health-related documentation.
+The current development focuses on a robust offline core: projects, entries, templates, attachments, tags, collections, typed relations, search, export and backups. Later versions add cross-cutting capabilities such as timelines, reusable resources, annotations, structured data and context snapshots. Specialized SASD Workbench applications can then build on the same core for lab work, software engineering, Linux administration, prompt experiments, biblical research, recipes and health-related documentation.
 
-> Status: active early development / reusable core foundation  
+> Status: active early development / reusable V1 core foundation  
 > Current technical baseline: C# / .NET 10 / Windows Forms / SQLite
 
 ---
@@ -13,7 +13,7 @@ The current development focuses on a robust offline core: projects, entries, tem
 
 ![SASD Workbench early mockup](docs/screenshots/screenshot-sasd-workbench-v1-mockup.png)
 
-*Early UI mockup. The current backend/core implementation is further advanced than this mockup and the final application may differ.*
+*Early UI mockup. The current implementation is further advanced than this mockup and the final application may differ.*
 
 ---
 
@@ -46,50 +46,52 @@ Features discovered in specialized projects such as Health Research or Biblical 
 
 ---
 
-## V1 Core Scope
+## Current V1 Core
 
-Version 1.0 is intended to provide:
+The current codebase contains the common local V1 backend and the first usable desktop integration for:
 
-- local desktop application
-- SQLite-based local storage
-- project management
-- entry management
-- entry types and status model
-- collections, including multiple collections per entry
-- tags
-- templates
-- controlled attachment handling
-- typed entry relations
-- title and content search
-- filters by project, type, status, collection and tag
-- Markdown project export
-- validated backup and restore
-- simple activity log
+- local SQLite-based project and entry management
+- optimistic concurrency and soft delete/archive foundations
+- generic entry types and status fields
+- tags and reusable templates
+- controlled attachment storage with SHA-256
+- hierarchical collections with multiple collection memberships per entry
+- typed semantic entry relations
+- title/content search plus project/type/status/collection/tag filters in the application layer
+- portable Markdown project export with copied attachments
+- full validated backup/restore with SQLite snapshots and pre-restore safety backups
+- lightweight activity history
+- focused WinForms dialogs for search, collections, relations and activity
+- desktop commands for export, backup and restore
 
-The current codebase already contains significant parts of this core and uses GitHub Actions plus an end-to-end smoke-test path to verify persistence and migrations.
+The Core also contains stable neutral keys and reusable template definitions for `research_question`, `research_source`, `observation`, `hypothesis`, `finding` and `conclusion`. These are generic building blocks rather than specialist domain models.
+
+GitHub Actions builds the complete solution with warnings treated as errors and runs an end-to-end Core smoke test against real SQLite persistence, migrations, controlled attachments, relations, search, export and backup/restore.
 
 ---
 
 ## Cross-Cutting Capabilities
 
-The common Workbench roadmap now explicitly includes reusable capabilities derived from multiple specialist notebooks:
+The common Workbench roadmap includes reusable capabilities derived from multiple specialist notebooks:
 
-- Timeline & Events
 - Research Questions
 - Observations & Hypotheses
 - typed semantic Entry Relations
 - Research Sources / References
+- Timeline & Events
 - Context Snapshots
 - Resource / Media Library with non-destructive annotations
 - Structured Data Blocks, Measurements and Tables
 
-These capabilities are deliberately generic. The common core does not contain medical, biblical, Linux-specific or other profile-specific interpretation.
+Research questions, source entries, observations, hypotheses and typed relations already have neutral V1 building blocks. Timeline, generalized Resources, annotations, Context Snapshots and structured Measurements remain later roadmap work.
+
+The common core does not contain medical, biblical, Linux-specific or other profile-specific interpretation.
 
 ---
 
 ## Architecture
 
-The application avoids a large monolithic UI file. Business and domain logic are separated from the Windows Forms frontend.
+Business and domain logic are separated from the Windows Forms frontend.
 
 Current solution structure:
 
@@ -108,10 +110,19 @@ sasd-workbench/
 Architecture principle:
 
 ```text
-UI → Application Services → Repositories → SQLite / File Storage
+UI / Host
+   ↓
+Application
+   ↓
+Domain
+
+Infrastructure implements Application abstractions for SQLite, file storage,
+export and backup/restore and is wired by the host composition root.
 ```
 
-The Domain and Application layers must remain independent of Windows Forms and profile-specific UI decisions.
+`AddSasdWorkbenchCore(...)` is the canonical profile-neutral dependency-injection registration for current and future Workbench hosts. A specialist host selects its data root, runs migrations, reuses the common Core registration and adds only its own profile/UI modules.
+
+The Domain and Application layers remain independent of Windows Forms and profile-specific UI decisions.
 
 ---
 
@@ -129,7 +140,7 @@ The shared core can later support different profiles or dedicated Workbench host
 | Biblical Research | Topics, sources, persons, events, arguments, open questions |
 | Food & Health | Diary, measurements, observations, nutrition and context documentation |
 
-The common Core provides primitives such as Entry, Collection, Relation, Timeline Event, Source, Resource and Measurement. Fachprofiles define what those primitives mean in their own domain.
+The current Core deliberately starts with generic primitives such as Entry, Template, Tag, Collection, Attachment and Relation. Additional generic primitives such as Timeline Event, Resource and Measurement are introduced only in the later roadmap stages where their concrete cross-profile requirements are understood.
 
 ---
 
@@ -143,10 +154,12 @@ Core project documentation:
 - [040 – Database Design](docs/040_Database_Design.md)
 - [045 – Cross-Cutting Features](docs/045_Cross_Cutting_Features.md)
 - [050 – Development Roadmap](docs/050_Development_Roadmap.md)
+- [ADR-001 – Shared Core Composition](docs/adr/ADR-001-shared-core-composition.md)
+- [ADR-002 – Open Core Vocabulary](docs/adr/ADR-002-open-core-vocabulary.md)
 - [CHANGELOG](CHANGELOG.md)
 - [Agent / repository instructions](AGENTS.md)
 
-`045_Cross_Cutting_Features.md` is a design supplement to the four original foundation documents and captures reusable capabilities discovered in later specialist-project discussions.
+`045_Cross_Cutting_Features.md` captures reusable capabilities discovered in later specialist-project discussions. ADRs record architecture decisions that should remain stable across future SASD Workbench products.
 
 ---
 
