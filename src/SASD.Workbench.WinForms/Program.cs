@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SASD.Workbench.Infrastructure.Configuration;
 using SASD.Workbench.Infrastructure.Database;
 using SASD.Workbench.Infrastructure.DependencyInjection;
 
@@ -8,16 +7,31 @@ namespace SASD.Workbench.WinForms;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
 
         try
         {
-            var paths = WorkbenchDataPaths.CreateDefault();
+            var startupOptions = WorkbenchStartupOptions.Parse(args);
+            if (startupOptions.ShowHelp)
+            {
+                MessageBox.Show(
+                    WorkbenchStartupOptions.HelpText,
+                    "SASD Workbench – Startup options",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            // An explicit --data-root is resolved before directories, migrations or services are
+            // touched. Therefore a malformed/unknown option cannot accidentally initialize the normal
+            // per-user data directory after the caller intended to start an isolated acceptance instance.
+            var paths = startupOptions.CreateDataPaths();
             paths.EnsureDirectories();
 
             var services = new ServiceCollection();
+            services.AddSingleton(startupOptions);
             services.AddSasdWorkbenchCore(paths);
             services.AddSingleton<MainForm>();
 
