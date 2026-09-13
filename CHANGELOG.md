@@ -31,6 +31,8 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Profile-neutral V1 entry type catalog for notes, research questions, sources, observations, hypotheses, findings and conclusions.
 - Profile-neutral Core template catalog for the shared V1 research/knowledge workflow.
 - Central open relation vocabulary with stable built-in keys and validation for profile-defined relation keys.
+- Focused WinForms dialogs for project-scoped search, collection membership, typed relations and activity history.
+- Desktop commands for portable Markdown project export and validated full backup/restore.
 
 ### Changed
 
@@ -38,6 +40,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - WinForms startup now consumes the same canonical Core registration that future specialist Workbench hosts can reuse.
 - The V1 Core smoke test now validates the production composition root in addition to real persistence, migration, search, export and backup/restore round-trips.
 - Entry relations now normalize stable machine keys to lowercase snake case while still allowing future profile-specific relation types.
+- The desktop shell now delegates V1 Core tools to focused dialogs instead of adding persistence or feature logic directly to `MainForm`.
 
 ### Fixed
 
