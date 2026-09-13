@@ -4,7 +4,7 @@ using SASD.Workbench.Domain.Entities;
 namespace SASD.Workbench.WinForms;
 
 /// <summary>
-/// Edits the many-to-many tag assignment of one entry through the shared TagService.
+/// Edits the many-to-many tag assignment of one entry through the shared <see cref="TagService"/>.
 /// </summary>
 internal sealed class TagsDialog : Form
 {
@@ -54,7 +54,10 @@ internal sealed class TagsDialog : Form
 
         _tagList.Dock = DockStyle.Fill;
         _tagList.CheckOnClick = true;
-        _tagList.DisplayMember = nameof(Tag.Name);
+
+        // Form inherits Control.Tag (object). Fully qualify the entity here so nameof cannot bind to
+        // the inherited WinForms property and silently stop being a refactoring-safe member reference.
+        _tagList.DisplayMember = nameof(SASD.Workbench.Domain.Entities.Tag.Name);
         root.Controls.Add(_tagList, 0, 1);
 
         var createPanel = new TableLayoutPanel
@@ -133,7 +136,7 @@ internal sealed class TagsDialog : Form
 
             for (var index = 0; index < _tagList.Items.Count; index++)
             {
-                if (_tagList.Items[index] is not Tag tag)
+                if (_tagList.Items[index] is not SASD.Workbench.Domain.Entities.Tag tag)
                 {
                     continue;
                 }
