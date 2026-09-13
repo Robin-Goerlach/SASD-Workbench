@@ -375,8 +375,12 @@ public sealed class MainForm : Form
 
         try
         {
+            // Pass the version that populated this editor. The Application service must reject the
+            // save if another operation has updated the Entry since then rather than silently applying
+            // these stale editor fields to a newer persisted version.
             var saved = await _entryService.UpdateAsync(
                 selectedEntry.Id,
+                selectedEntry.Version,
                 _titleTextBox.Text,
                 _summaryTextBox.Text,
                 _contentTextBox.Text,
@@ -388,6 +392,8 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
+            // A concurrency conflict intentionally leaves the editor untouched so the user can copy
+            // or compare their unsaved text before reloading the newer persisted state.
             ShowError("The entry could not be saved.", ex);
         }
     }

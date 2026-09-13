@@ -44,6 +44,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Desktop attachment comment editing backed by the shared Application service.
 - Layered xUnit v3 test projects for Domain rules, Application use cases and real SQLite/file-system Infrastructure integration.
 - Focused regression coverage for wildcard-safe entry search, cross-project relation rejection and transactional attachment compensation after a forced activity failure.
+- Application- and SQLite-level regression tests for stale Project/Entry writers and lost-update prevention.
 
 ### Changed
 
@@ -57,12 +58,15 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Profile-specific template queries now also include shared `general` templates, matching the existing template-use rules for specialist Workbench hosts.
 - The V1 acceptance checklist now covers templates, tags, attachments and their recovery/activity behavior before V2 work begins.
 - CI now runs focused Domain, Application and Infrastructure tests before the broad V1 Core smoke test so failures are localized to the smallest useful layer.
+- Project and Entry mutation use cases now require the version originally observed by the caller; SQLite repeats the version predicate to protect the race between Application validation and persistence.
+- Optimistic-concurrency conflicts now surface as the profile-neutral `OptimisticConcurrencyException` regardless of whether the conflict is detected by Application logic or the SQLite adapter.
 
 ### Fixed
 
 - Corrected SQL clause composition in SQLite entry search that could produce `FROM entries eWHERE ...`.
 - Disabled connection pooling for transient backup snapshot/validation databases so Windows file handles do not block archive creation or restore file moves.
 - Aligned template listing with template creation rules so a specialist profile can discover the shared general templates it is allowed to use.
+- Prevented a stale Project/Entry editor from overwriting a newer persisted version merely because the Application service reloaded that newer version immediately before saving.
 
 ## [0.0.0] - 2026-05-12
 

@@ -38,7 +38,7 @@ Schnelle xUnit-v3-Tests ohne Datenbank oder Dateisystem. Sie sichern Validierung
 
 ### Application Tests
 
-Schnelle xUnit-v3-Tests mit kleinen In-Memory-Fakes. Sie prüfen Use-Case-Regeln unabhängig vom konkreten Persistence Adapter, insbesondere Profil-/Projektgrenzen und normale Content-Management-Regeln.
+Schnelle xUnit-v3-Tests mit kleinen In-Memory-Fakes. Sie prüfen Use-Case-Regeln unabhängig vom konkreten Persistence Adapter, insbesondere Profil-/Projektgrenzen, normale Content-Management-Regeln und den caller-seitigen Optimistic-Concurrency-Vertrag.
 
 ### Infrastructure Tests
 
@@ -90,7 +90,10 @@ Aktuelle Beispiele:
 - erstellte Entries bleiben unabhängig von später gelöschten Benutzertemplates,
 - Relations dürfen in V1 nicht projektübergreifend angelegt werden,
 - gelöschte/missing Entries können nicht als Relation-Endpunkt verwendet werden,
-- Relation-Delete ist idempotent.
+- Relation-Delete ist idempotent,
+- Project-/Entry-Mutationen akzeptieren nur die Version, die der Caller ursprünglich geladen hat,
+- ein stale Caller wird vor der Domain-Mutation mit `OptimisticConcurrencyException` abgewiesen,
+- ein gültiger Save erhöht die Version genau einmal.
 
 Ziel: Use-Case-Regeln ohne technische Adapter präzise lokalisieren.
 
@@ -103,12 +106,13 @@ Aktuelle Beispiele:
 - Migration von leerer DB bis aktuelle Version,
 - idempotenter zweiter Migration-Lauf,
 - LIKE-Suche escaped `%` und `_` als Benutzertext,
+- zwei getrennt geladene Project-/Entry-Kopien aus derselben Version: erster Writer gewinnt, zweiter Writer wird atomar abgewiesen,
+- Repository-Konflikte liefern dieselbe profile-neutrale `OptimisticConcurrencyException` wie die Application-Schicht,
 - Activity + Primärmutation rollen gemeinsam zurück,
 - Attachment-Datei + SQLite-Metadaten bleiben auch bei Activity-Fehler konsistent: DB-Rollback plus kompensierende Dateilöschung.
 
 Weitere Zieltests:
 
-- optimistic concurrency,
 - Foreign Keys,
 - Upgrade-Fixtures veröffentlichter Schemastände,
 - Backup-Archivvalidierung,
@@ -140,6 +144,7 @@ Ziel: beweisen, dass die Anwendungsschichten gemeinsam funktionieren und Recover
 - Create/Read/Update,
 - Version startet bei 1,
 - logisches Update erhöht Version genau einmal,
+- mutierende Use Cases erhalten die vom Caller beobachtete Version,
 - Soft Delete / Restore-Roundtrip.
 
 ### Templates
@@ -210,12 +215,18 @@ Beispiele:
 - Activity Insert schlägt nach Primärmutation fehl,
 - Attachment-Datei wurde kopiert, Metadateninsert bzw. nachfolgender Activity-Insert schlägt fehl,
 - Restore-Archiv enthält unerwartete Pfade,
-- Concurrency-Version stimmt nicht,
+- Caller-Version ist bereits stale,
+- Datensatz ändert sich zwischen Application-Read und SQLite-UPDATE,
 - referenziertes Entry/Project existiert nicht.
 
-Erwartung: Der resultierende Zustand muss dokumentiert und kontrolliert sein; keine stillen Teil-Erfolge.
+Erwartung: Der resultierende Zustand muss dokumentiert und kontrolliert sein; keine stillen Teil-Erfolge und keine Lost Updates.
 
 Der gezielte Attachment-Integrationstest erzwingt deshalb einen Fehler **nach** der Dateikopie und nach dem Metadata-INSERT beim Activity-Write. Erwartet werden SQLite-Rollback und kompensierende Löschung der bereits kopierten Datei.
+
+Optimistic Concurrency wird bewusst auf zwei Ebenen getestet:
+
+1. Application Tests beweisen, dass eine bereits beim Use-Case-Start stale Caller-Version die aktuelle Entity nicht verändert.
+2. Infrastructure Tests beweisen mit zwei getrennt geladenen Version-1-Kopien, dass ein zweiter Writer auch dann atomar scheitert, wenn der Konflikt erst beim bedingten SQLite-UPDATE sichtbar wird.
 
 ## 6. Deterministische Zeit
 
@@ -321,6 +332,8 @@ Beispiele aus dem bisherigen Projekt:
 - SQLite Connection Pooling blockiert temporäre Backup-Datei unter Windows → Infrastructure/Recovery,
 - Attachment-Datei wurde kopiert und späterer DB-/Activity-Schritt schlägt fehl → Infrastructure Compensation Test,
 - Cross-Project-Relation → Application Test,
+- stale Editor-/Caller-Version → Application Optimistic-Concurrency Test,
+- konkurrierende SQLite-Writer aus derselben Version → Infrastructure Optimistic-Concurrency Test,
 - Entry-Versionierung → Domain Test.
 
 Der breite Smoke-Test bleibt wichtig, soll aber nicht zur einzigen Stelle werden, an der jede kleine Regel getestet wird.

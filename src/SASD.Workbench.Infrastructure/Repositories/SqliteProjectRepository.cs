@@ -1,6 +1,6 @@
-using System.Data;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using SASD.Workbench.Application.Exceptions;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
 using SASD.Workbench.Domain.Metadata;
@@ -112,12 +112,13 @@ public sealed class SqliteProjectRepository : IProjectRepository
             WHERE id = $id AND version = $previousVersion;
             """;
         AddParameters(command, project);
-        command.Parameters.AddWithValue("$previousVersion", project.Version - 1);
+        var expectedVersion = project.Version - 1;
+        command.Parameters.AddWithValue("$previousVersion", expectedVersion);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (rows != 1)
         {
-            throw new DBConcurrencyException($"Project '{project.Id}' was changed or removed by another operation.");
+            throw new OptimisticConcurrencyException(nameof(Project), project.Id, expectedVersion);
         }
 
         var actionType = project.IsDeleted

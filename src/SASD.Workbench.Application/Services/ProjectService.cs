@@ -1,3 +1,4 @@
+using SASD.Workbench.Application.Exceptions;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
 
@@ -37,29 +38,42 @@ public sealed class ProjectService
         return project;
     }
 
+    /// <summary>
+    /// Updates project metadata only while the version originally observed by the caller is current.
+    /// </summary>
     public async Task<Project> UpdateAsync(
         Guid id,
+        long expectedVersion,
         string name,
         string? description,
         string profileKey,
         CancellationToken cancellationToken = default)
     {
         var project = await RequireProjectAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(project, expectedVersion);
         project.Update(name, description, profileKey, _clock.UtcNow);
         await _projects.UpdateAsync(project, cancellationToken).ConfigureAwait(false);
         return project;
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Archives a project only when the caller still owns the version it previously loaded.
+    /// </summary>
+    public async Task ArchiveAsync(Guid id, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var project = await RequireProjectAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(project, expectedVersion);
         project.Archive(_clock.UtcNow);
         await _projects.UpdateAsync(project, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Soft-deletes a project only when the caller still owns the version it previously loaded.
+    /// </summary>
+    public async Task DeleteAsync(Guid id, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var project = await RequireProjectAsync(id, cancellationToken).ConfigureAwait(false);
+        EnsureExpectedVersion(project, expectedVersion);
         project.Delete(_clock.UtcNow);
         await _projects.UpdateAsync(project, cancellationToken).ConfigureAwait(false);
     }
@@ -73,5 +87,22 @@ public sealed class ProjectService
         }
 
         return project;
+    }
+
+    private static void EnsureExpectedVersion(Project project, long expectedVersion)
+    {
+        if (expectedVersion < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedVersion), "Expected version must be at least 1.");
+        }
+
+        if (project.Version != expectedVersion)
+        {
+            throw new OptimisticConcurrencyException(
+                nameof(Project),
+                project.Id,
+                expectedVersion,
+                project.Version);
+        }
     }
 }

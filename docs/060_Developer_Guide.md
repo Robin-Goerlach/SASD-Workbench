@@ -274,6 +274,24 @@ Grundsätze:
 - destructive operations benötigen sichtbare Bestätigung,
 - Restore erzeugt vor dem Austausch des Live-Zustands ein Safety Backup.
 
+### Optimistic Concurrency für Hosts
+
+Project- und Entry-Mutationen verwenden eine zweistufige Optimistic-Concurrency-Garantie:
+
+1. Der Host gibt die `Version` weiter, die gemeinsam mit dem angezeigten Entity geladen wurde.
+2. Der Application Service vergleicht diese Caller-Version mit dem aktuell gelesenen Entity.
+3. Das SQLite-Repository wiederholt den Vergleich atomar im bedingten `UPDATE`, um das Rennen zwischen Application-Read und tatsächlichem Write zu schließen.
+
+Wichtig für alle heutigen und zukünftigen Hosts:
+
+- Die erwartete Version darf **nicht** unmittelbar vor dem Speichern neu aus der Datenbank geholt werden. Das würde einen stale Editor wieder als aktuell erscheinen lassen und die Schutzwirkung umgehen.
+- Bei `OptimisticConcurrencyException` dürfen ungespeicherte Nutzereingaben nicht still verworfen werden.
+- Der Host soll verständlich erklären, dass sich der Datensatz inzwischen geändert hat, und anschließend einen bewussten Reload/Merge/Retry ermöglichen.
+- Ein automatischer Retry mit denselben stale Feldern gegen die neueste Version ist kein zulässiger Konflikt-Handler.
+- Profile sollen dieselbe Application-Exception behandeln und keine SQLite-spezifischen Concurrency-Ausnahmen voraussetzen.
+
+Der erste WinForms-Host übergibt deshalb beim Entry-Save die Version des aktuell ausgewählten Entries und lässt den Editorinhalt bei einem Konflikt stehen.
+
 ## 13. Backup und Datenhoheit
 
 Backup umfasst Datenbank und kontrollierten Attachment-Speicher.
