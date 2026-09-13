@@ -12,6 +12,7 @@ Schwerpunkte:
 
 - verständlicher Grundworkflow,
 - Daten bleiben nach Neustart erhalten,
+- Templates, Tags und Attachments sind praktisch nutzbar,
 - Search / Collections / Relations sind praktisch bedienbar,
 - Activity History ist nachvollziehbar,
 - Export ist außerhalb der Anwendung lesbar,
@@ -128,9 +129,140 @@ Erwartung:
 - Projekt und Entry vollständig vorhanden.
 - Text `BlueOrchid-4711` unverändert vorhanden.
 
-## 6. Search
+## 6. Templates
 
-### AT-020 – Textsuche
+### AT-020 – aktuellen Entry als projektlokales Template speichern
+
+1. `First acceptance note` auswählen.
+2. `Templates` öffnen.
+3. `Save current entry as template...` verwenden.
+4. Name `Acceptance local template` eingeben.
+5. Profilweite Option **nicht** aktivieren.
+
+Erwartung:
+
+- Template erscheint in der Liste.
+- Scope ist als aktuelles Projekt erkennbar.
+- Entry Type, Default Status und Beschreibung/Inhalt entsprechen dem Ausgangs-Entry.
+
+### AT-021 – Entry aus Template erzeugen
+
+1. `Acceptance local template` auswählen.
+2. Titel `Created from acceptance template` eingeben.
+3. Entry erzeugen.
+
+Erwartung:
+
+- Dialog schließt erfolgreich.
+- neuer Entry ist ausgewählt.
+- Type/Status/Inhalt wurden aus dem Template kopiert.
+- spätere Änderungen am Entry verändern das Template nicht automatisch.
+
+### AT-022 – profilweites Template
+
+1. einen geeigneten Entry auswählen.
+2. erneut als Template speichern.
+3. Option `Available to all projects in profile ...` aktivieren.
+4. zweites Projekt mit demselben Profil anlegen.
+5. Templates dort öffnen.
+
+Erwartung:
+
+- profilweites Template ist auch im zweiten Projekt sichtbar.
+- projektlokales Template aus AT-020 ist dort **nicht** sichtbar.
+
+### AT-023 – Template löschen
+
+Ein selbst angelegtes Template löschen.
+
+Erwartung:
+
+- Löschwarnung beschreibt den Scope.
+- Template verschwindet aus der Auswahl.
+- bereits daraus erzeugte Entries bleiben unverändert erhalten.
+
+## 7. Tags
+
+### AT-030 – Tag anlegen und zuweisen
+
+Am `First acceptance note`:
+
+```text
+Tag: acceptance
+```
+
+über `Create + assign` anlegen.
+
+Erwartung:
+
+- Tag erscheint und ist angehakt.
+- erneutes Öffnen zeigt die Zuordnung weiterhin.
+
+### AT-031 – vorhandenen Tag einem zweiten Entry zuordnen
+
+1. `Created from acceptance template` auswählen.
+2. Tags öffnen.
+3. vorhandenen Tag `acceptance` anhaken.
+4. Assignments übernehmen.
+
+Erwartung:
+
+- derselbe Tag wird wiederverwendet; kein zweiter gleichnamiger Tag nötig.
+
+### AT-032 – Tag-Zuordnung entfernen
+
+`acceptance` beim zweiten Entry abwählen und übernehmen.
+
+Erwartung:
+
+- Zuordnung zum zweiten Entry verschwindet.
+- Tag bleibt global vorhanden.
+- Zuordnung zum ersten Entry bleibt unverändert.
+
+## 8. Attachments
+
+Vorbereitung: kleine lokale Testdatei, z. B. `acceptance-attachment.txt`, mit eindeutigem Inhalt anlegen.
+
+### AT-040 – Attachment hinzufügen
+
+1. `First acceptance note` auswählen.
+2. `Attachments` öffnen.
+3. Testdatei hinzufügen.
+4. Kommentar `Initial acceptance attachment` eintragen.
+
+Erwartung:
+
+- Attachment erscheint mit Dateiname, Größe, Kommentar und SHA-256.
+- Originaldatei bleibt an ihrem ursprünglichen Ort unverändert.
+
+### AT-041 – Attachment-Kommentar bearbeiten
+
+Kommentar ändern auf:
+
+```text
+Updated acceptance attachment comment
+```
+
+Erwartung:
+
+- Änderung erscheint nach Reload/erneutem Öffnen weiterhin.
+- Dateiname und SHA-256 ändern sich dadurch nicht.
+
+### AT-042 – Attachment entfernen
+
+Attachment über `Remove from entry` entfernen.
+
+Erwartung:
+
+- Warnung erklärt den Soft-Delete/Recovery-Charakter.
+- Attachment verschwindet aus der aktiven Liste.
+- UI behauptet nicht, dass die physische Datei sofort sicher gelöscht wurde.
+
+Für den späteren Backup-/Restore-Test anschließend ein Attachment erneut hinzufügen und **nicht** entfernen.
+
+## 9. Search
+
+### AT-050 – Textsuche
 
 Suche nach:
 
@@ -143,7 +275,7 @@ Erwartung:
 - `First acceptance note` wird gefunden.
 - irrelevante Entries werden nicht als Treffer benötigt.
 
-### AT-021 – Type-/Status-Filter
+### AT-051 – Type-/Status-Filter
 
 Filter nacheinander auf vorhandenen Type und Status setzen.
 
@@ -152,9 +284,9 @@ Erwartung:
 - Ergebnis passt zum ausgewählten Projekt und Filter.
 - Dialog bleibt verständlich, wenn kein Treffer existiert.
 
-## 7. Collections
+## 10. Collections
 
-### AT-030 – Collection-Hierarchie
+### AT-060 – Collection-Hierarchie
 
 Anlegen:
 
@@ -168,7 +300,7 @@ Erwartung:
 - beide Collections erscheinen.
 - Parent/Child-Zuordnung ist erkennbar.
 
-### AT-031 – Mehrfachzuordnung
+### AT-061 – Mehrfachzuordnung
 
 1. aktuellen Entry `Research` zuordnen.
 2. denselben Entry zusätzlich `Sources` zuordnen.
@@ -178,7 +310,7 @@ Erwartung:
 - Entry kann beiden Collections gleichzeitig angehören.
 - keine implizite Verschiebe-Semantik.
 
-### AT-032 – Zuordnung entfernen
+### AT-062 – Zuordnung entfernen
 
 Eine Membership entfernen.
 
@@ -187,9 +319,11 @@ Erwartung:
 - nur die gewählte Membership verschwindet.
 - andere Membership bleibt bestehen.
 
-## 8. Relations
+## 11. Relations
 
-### AT-040 – Zweiten Entry anlegen
+### AT-070 – zweiten Entry als Relation-Ziel verwenden
+
+Den vorhandenen zweiten Entry verwenden oder anlegen:
 
 ```text
 Title: Supporting note
@@ -197,7 +331,7 @@ Type: finding
 Status: draft
 ```
 
-### AT-041 – Relation anlegen
+### AT-071 – Relation anlegen
 
 Von `First acceptance note` zu `Supporting note`:
 
@@ -211,7 +345,7 @@ Erwartung:
 - Relation erscheint in der Relations-Ansicht.
 - Richtung Quelle → Ziel ist verständlich.
 
-### AT-042 – Eingehende Relation
+### AT-072 – eingehende Relation
 
 `Supporting note` auswählen und Relations öffnen.
 
@@ -219,7 +353,7 @@ Erwartung:
 
 - dieselbe Relation ist als eingehende Relation erkennbar.
 
-### AT-043 – Relation löschen
+### AT-073 – Relation löschen
 
 Relation löschen.
 
@@ -228,30 +362,32 @@ Erwartung:
 - Relation verschwindet aus beiden Ansichten.
 - Entries selbst bleiben unverändert.
 
-## 9. Activity History
+## 12. Activity History
 
-### AT-050 – automatische Activities
+### AT-080 – automatische Activities
 
 Activity History für das Testprojekt öffnen.
 
 Erwartung:
 
 - Projekt-/Entry-Erstellung ist nachvollziehbar.
-- Collection-/Membership-/Relation-Aktionen, die tatsächlich durchgeführt wurden, sind nachvollziehbar.
-- gelöschte Relation erscheint als entsprechende History, sofern Aktion nach aktuellem Implementierungsstand protokolliert wird.
+- projektlokale Template-Erstellung/-Löschung ist nachvollziehbar.
+- Tag-Zuordnungen, Attachment-Metadatenänderungen, Collection-/Membership- und Relation-Aktionen sind nachvollziehbar.
 - History wird nicht als „Audit Trail“ oder manipulationssicher dargestellt.
 
-### AT-051 – Idempotenz beobachten
+Hinweis: rein globale/profilweite Template- oder Tag-Erzeugung kann ohne konkrete Project-ID protokolliert sein und muss deshalb nicht in einer **projektgefilterten** Activity-Ansicht erscheinen. Die konkrete Zuordnung zu einem Entry besitzt dagegen Projektkontext.
 
-Eine bereits bestehende Membership/Zuordnung ohne echte Änderung erneut ausführen, soweit die UI dies erlaubt.
+### AT-081 – Idempotenz beobachten
+
+Eine bereits bestehende Membership/Tag-Zuordnung ohne echte Änderung erneut ausführen, soweit die UI dies erlaubt.
 
 Erwartung:
 
 - kein irreführender zweiter automatischer History-Eintrag für dieselbe No-op-Mutation.
 
-## 10. Markdown Export
+## 13. Markdown Export
 
-### AT-060 – Projekt exportieren
+### AT-090 – Projekt exportieren
 
 Projekt in einen neuen leeren Zielordner exportieren.
 
@@ -262,8 +398,10 @@ Erwartung:
 - Entry-Dateien vorhanden.
 - Markdown mit normalem Texteditor lesbar.
 - Metadaten sind nachvollziehbar.
+- aktives Attachment wird kopiert.
+- Attachment-Kommentar/Hash-Metadaten sind nachvollziehbar, soweit im Exportformat vorgesehen.
 
-### AT-061 – Export außerhalb der Workbench lesen
+### AT-091 – Export außerhalb der Workbench lesen
 
 Workbench schließen und Exportdateien separat öffnen.
 
@@ -271,9 +409,9 @@ Erwartung:
 
 - Kerninformationen bleiben ohne die Anwendung verständlich.
 
-## 11. Backup und Restore
+## 14. Backup und Restore
 
-### AT-070 – Full Backup
+### AT-100 – Full Backup
 
 Backup über die Desktop-Funktion erzeugen.
 
@@ -284,18 +422,19 @@ Erwartung:
 
 Pfad des Backups notieren.
 
-### AT-071 – sichtbare Änderung nach Backup
+### AT-101 – sichtbare Änderungen nach Backup
 
-Nach dem Backup:
+Nach dem Backup mindestens zwei gut sichtbare Änderungen durchführen, z. B.:
 
 - einen Entry deutlich umbenennen oder löschen,
+- Attachment-Kommentar ändern oder Attachment entfernen,
 - optional einen zusätzlichen Entry anlegen.
 
 Erwartung:
 
-- Änderung ist sichtbar und nach normalem Refresh/Neustart vorhanden.
+- Änderungen sind sichtbar und nach normalem Refresh/Neustart vorhanden.
 
-### AT-072 – Restore
+### AT-102 – Restore
 
 Das zuvor erzeugte Backup auswählen.
 
@@ -304,11 +443,12 @@ Erwartung:
 - Anwendung warnt vor dem Zustandstausch.
 - Restore wird nur nach bewusster Bestätigung ausgeführt.
 - Safety-Backup des ersetzten Zustands wird gemeldet/erzeugt.
-- Projektzustand entspricht danach dem Zeitpunkt von AT-070.
-- Änderungen aus AT-071 sind nicht mehr im restaurierten Live-Zustand.
+- Projektzustand entspricht danach dem Zeitpunkt von AT-100.
+- Änderungen aus AT-101 sind nicht mehr im restaurierten Live-Zustand.
+- Attachment samt Kommentar/Datei entspricht wieder dem Backup-Zeitpunkt.
 - Activity History entspricht ebenfalls dem Backup-Zeitpunkt.
 
-### AT-073 – Neustart nach Restore
+### AT-103 – Neustart nach Restore
 
 Anwendung schließen und erneut starten.
 
@@ -317,9 +457,9 @@ Erwartung:
 - restaurierter Zustand bleibt stabil.
 - keine Migration-/SQLite-Fehler.
 
-## 12. Fehler- und UX-Prüfung
+## 15. Fehler- und UX-Prüfung
 
-### AT-080 – ungültige Pflichtangabe
+### AT-110 – ungültige Pflichtangabe
 
 Versuchen, ein Objekt mit leerem Pflichtnamen/-titel anzulegen, soweit UI dies zulässt.
 
@@ -328,45 +468,48 @@ Erwartung:
 - verständliche Meldung.
 - keine halbfertige persistente Zeile.
 
-### AT-081 – Dialog-Abbruch
+### AT-111 – Dialog-Abbruch
 
-Create-/Restore-/Export-Dialoge jeweils abbrechen.
+Create-/Template-/Attachment-/Restore-/Export-Dialoge jeweils abbrechen.
 
 Erwartung:
 
-- keine Mutation.
+- keine unbeabsichtigte Mutation.
 - keine Fehlermeldung für einen normalen Benutzerabbruch.
 
-### AT-082 – Fenstergrößen / Bedienbarkeit
+### AT-112 – Fenstergrößen / Bedienbarkeit
 
 Bei normaler Desktop-Auflösung prüfen:
 
 - Texte abgeschnitten?
 - Buttons erreichbar?
 - Listen sinnvoll scrollbar?
+- Toolstrip auch bei kleinerem Fenster sinnvoll nutzbar?
 - Dialoge verständlich beschriftet?
 - kritische Aktionen ausreichend deutlich?
 
-## 13. Explorative Phase
+## 16. Explorative Phase
 
 Nach den festen Fällen 15–30 Minuten frei mit der Anwendung arbeiten:
 
 - mehrere Projects,
 - viele Entries,
+- mehrere Templates/Tags/Attachments,
 - längere Markdown-Texte,
 - schnelle Selektionswechsel,
 - wiederholtes Öffnen/Schließen der Dialoge,
-- Kombination Search → Entry → Relation/Collection.
+- Kombination Template → Entry → Tags/Attachment → Search → Relation/Collection.
 
 Jede Überraschung als Finding erfassen, auch wenn sie kein technischer Fehler ist.
 
-## 14. Exit-Kriterien für V1 intern
+## 17. Exit-Kriterien für V1 intern
 
 V1 kann als intern belastbar betrachtet werden, wenn:
 
 - kein Critical-/High-Finding offen ist,
 - Backup/Restore einschließlich Neustart bestanden hat,
 - Datenpersistenz nach Neustart bestanden hat,
+- Templates/Tags/Attachments praktisch nutzbar sind,
 - Search/Collections/Relations praktisch nutzbar sind,
 - automatische Activity History plausibel ist,
 - alle Findings priorisiert und im Repository nachvollziehbar festgehalten sind,
