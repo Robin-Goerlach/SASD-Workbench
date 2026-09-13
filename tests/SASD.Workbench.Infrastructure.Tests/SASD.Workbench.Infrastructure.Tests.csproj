@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/SASD.Workbench.Application/SASD.Workbench.Application.csproj" />
+    <ProjectReference Include="../../src/SASD.Workbench.Domain/SASD.Workbench.Domain.csproj" />
+    <ProjectReference Include="../../src/SASD.Workbench.Infrastructure/SASD.Workbench.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

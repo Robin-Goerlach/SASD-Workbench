@@ -49,7 +49,7 @@ Die Priorität lautet:
 
 ### V1.0 – Core Backend / Recovery Foundation
 
-Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und über den End-to-End-Smoke-Test abgesichert:
+Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und über geschichtete Tests plus End-to-End-Smoke-Test abgesichert:
 
 - hierarchische Collections
 - Mehrfachzuordnung von Entries zu Collections
@@ -70,6 +70,7 @@ Backend und technische Querschnittsfunktionen sind inzwischen vorhanden und übe
 - projektlokale und profilweite Benutzertemplates
 - allgemeine Templates bleiben in Spezialprofilen sichtbar und nutzbar
 - Developer Guide und dokumentierte Teststrategie
+- Domain-/Application-/Infrastructure-Testprojekte plus breiter Core-Smoke-Test
 - vorbereitete interne V1-Abnahmecheckliste
 
 Für den internen V1-Einsatz fehlt jetzt vor allem der **reale strukturierte Nutzertest** und die anschließende Konsolidierung seiner Findings. Bis dahin bleibt der Status „prepared for internal acceptance“, nicht „abgenommen“.
@@ -102,6 +103,7 @@ V1.0 soll eine robuste, intern nutzbare lokale Workbench bilden.
 - [x] dokumentierter lokaler Datenpfad / zentrale Pfadabstraktion
 - [x] Developer Guide
 - [x] Test Strategy
+- [x] geschichtete Domain-/Application-/Infrastructure-Tests als CI-Gates
 - [x] interne V1-Abnahmecheckliste vorbereitet
 - [ ] interne V1-Abnahmecheckliste auf realem Windows-Desktop ausgeführt
 - [ ] Findings priorisiert und Critical-/High-Findings geschlossen
@@ -323,9 +325,9 @@ Stand 2026-09-13:
 8. [x] Semantik und Transaktionsverhalten für automatisches Activity Recording der mutierenden Core-Use-Cases festlegen und implementieren.
 9. [x] Developer Guide und Test Strategy ergänzen.
 10. [x] strukturierten internen V1-Nutzertest als wiederholbare Checkliste vorbereiten.
-11. [ ] V1-Nutzertest auf realem Windows-Desktop durchführen und Findings priorisieren.
-12. [ ] aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
-13. [ ] Testlandschaft gezielt in Domain-/Application-/Infrastructure-Tests ausbauen, ohne den realen End-to-End-Smoke-Test zu ersetzen.
+11. [x] Testlandschaft in Domain-/Application-/Infrastructure-Tests ausbauen, ohne den realen End-to-End-Smoke-Test zu ersetzen.
+12. [ ] V1-Nutzertest auf realem Windows-Desktop durchführen und Findings priorisieren.
+13. [ ] aus dem Nutzertest resultierende V1-Qualitäts-/UX-Lücken schließen.
 14. [ ] erst danach Timeline/Resource/Structured-Data-Design für V2 implementieren.
 
 ---
@@ -357,8 +359,9 @@ Mindestens erforderlich:
 - Activity History konsistent
 - Datenexport/Backup nicht gebrochen
 - Restore berücksichtigt
+- schnellster sinnvoller Domain-/Application-/Infrastructure-Regressionstest vorhanden
 - CI grün
-- Smoke-/Integrationstest erweitert
+- Smoke-/Integrationstest erweitert, wenn der vollständige Workflow betroffen ist
 - Dokumentation aktualisiert
 - keine profilspezifische Logik in den Core gezogen
 

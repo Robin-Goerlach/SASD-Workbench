@@ -23,6 +23,7 @@ Aktueller Baseline-Stack:
 - SQLite über `Microsoft.Data.Sqlite`
 - lokaler kontrollierter Dateispeicher für Attachments
 - `Microsoft.Extensions.DependencyInjection` für Composition
+- xUnit v3 für geschichtete Unit-/Integrationstests
 - GitHub Actions auf Windows
 
 Das Repository pinnt die .NET-SDK-Linie über `global.json`. `Directory.Build.props` aktiviert Nullable Reference Types, aktuelle Analyzer und `TreatWarningsAsErrors`.
@@ -37,6 +38,9 @@ src/
   SASD.Workbench.WinForms/
 
 tests/
+  SASD.Workbench.Domain.Tests/
+  SASD.Workbench.Application.Tests/
+  SASD.Workbench.Infrastructure.Tests/
   SASD.Workbench.SmokeTests/
 
 docs/
@@ -121,10 +125,14 @@ Vom Repository-Root:
 dotnet --version
 dotnet restore SASD-Workbench.slnx
 dotnet build SASD-Workbench.slnx --configuration Release --no-restore
+
+dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
-Der Release-Build ist maßgeblich, weil Warnungen als Fehler behandelt werden.
+Der Release-Build ist maßgeblich, weil Warnungen als Fehler behandelt werden. Die Tests werden bewusst in Schichten ausgeführt: reine Regeln zuerst, reale SQLite-/Dateisystemintegration danach und der breite End-to-End-Smoke-Test zuletzt.
 
 Zum Starten des Desktop-Hosts:
 
@@ -204,7 +212,7 @@ Regeln:
 - Migrationen müssen wiederholt ausführbar bzw. vom Migrator eindeutig als bereits angewendet erkennbar sein,
 - Foreign Keys und relevante Indizes explizit berücksichtigen,
 - Backup/Restore-Kompatibilität prüfen,
-- Smoke Test um den neuen Roundtrip erweitern.
+- Infrastructure-/Smoke-Tests um den neuen Roundtrip erweitern.
 
 Eine neue Tabelle ist kein Standardmittel für ein neues Fachfeature. Erst prüfen, ob vorhandene Core-Primitiven ausreichen.
 
@@ -222,7 +230,7 @@ Wichtige Regeln:
 - Activity Log nicht als manipulationssicheren Audit Trail bezeichnen,
 - explizite fachliche Ereignisse dürfen weiterhin über `ActivityLogService` geschrieben werden.
 
-Attachments bilden eine Sondergrenze: Dateisystembytes und SQLite können keine gemeinsame ACID-Transaktion bilden. Der Application Service verwendet bei fehlgeschlagenem Metadaten-Insert eine kompensierende Dateilöschung.
+Attachments bilden eine Sondergrenze: Dateisystembytes und SQLite können keine gemeinsame ACID-Transaktion bilden. Der Application Service verwendet bei fehlgeschlagenem Metadaten-/Activity-Commit eine kompensierende Dateilöschung. Der Infrastructure-Test erzwingt genau diesen Teilfehler und prüft beide Seiten der Kompensation.
 
 Siehe `docs/adr/ADR-003-transactional-lightweight-activity-history.md`.
 
@@ -278,28 +286,35 @@ Wenn nicht, ist die Core-Funktion nicht fertig.
 
 ## 14. Tests vor Merge
 
-Mindestens:
+Mindestens dieselben Gates wie in CI ausführen:
 
 ```powershell
 dotnet restore SASD-Workbench.slnx
 dotnet build SASD-Workbench.slnx --configuration Release --no-restore
+
+dotnet run --project tests/SASD.Workbench.Domain.Tests/SASD.Workbench.Domain.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.Application.Tests/SASD.Workbench.Application.Tests.csproj --configuration Release --no-build
+dotnet run --project tests/SASD.Workbench.Infrastructure.Tests/SASD.Workbench.Infrastructure.Tests.csproj --configuration Release --no-build
 dotnet run --project tests/SASD.Workbench.SmokeTests/SASD.Workbench.SmokeTests.csproj --configuration Release --no-build
 ```
 
-Für neue persistente Core-Funktionen zusätzlich prüfen:
+Für neue Core-Funktionen gilt zusätzlich:
 
-- Migration/Roundtrip,
-- Fehlerpfad,
-- Activity-Auswirkung,
-- Backup/Restore-Auswirkung,
-- Idempotenz, wenn relevant,
-- Profilneutralität.
+- reine Domain-/Use-Case-Regel möglichst im schnellsten passenden Testprojekt absichern,
+- SQLite-/File-I/O-Vertrag als Infrastructure-Test absichern,
+- breiten Smoke-Test nur dort erweitern, wo die vollständige Composition/Recovery-Kette relevant ist,
+- Migration/Roundtrip prüfen,
+- Fehlerpfad prüfen,
+- Activity-Auswirkung prüfen,
+- Backup/Restore-Auswirkung prüfen,
+- Idempotenz prüfen, wenn relevant,
+- Profilneutralität prüfen.
 
 Details stehen in `070_Test_Strategy.md`.
 
 ## 15. Git-/PR-Arbeitsweise
 
-Für zusammenhängende Architekturänderungen einen eigenen Feature-Branch verwenden.
+Für zusammenhängende Architekturänderungen einen eigenen Feature-/Test-Branch verwenden.
 
 Ein PR soll erklären:
 
@@ -310,7 +325,7 @@ Ein PR soll erklären:
 - Tests/CI,
 - bekannte Grenzen.
 
-Nicht mergen, solange der Windows-Release-Build oder der V1-Core-Smoke-Test fehlschlägt.
+Nicht mergen, solange Release-Build, geschichtete Tests oder der V1-Core-Smoke-Test fehlschlagen.
 
 ## 16. Definition of Done für gemeinsame Core-Funktionen
 
@@ -321,6 +336,7 @@ Eine Funktion ist erst fertig, wenn:
 - persistente Daten roundtrip-getestet sind,
 - Fehlerpfade berücksichtigt sind,
 - Activity/Backup/Restore nicht inkonsistent werden,
+- der schnellste sinnvolle Regressionstest existiert,
 - CI grün ist,
 - Roadmap/CHANGELOG/Dokumentation den echten Stand wiedergeben,
 - keine unnötige profilspezifische Logik in den Core gezogen wurde.
