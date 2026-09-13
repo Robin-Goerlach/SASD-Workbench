@@ -47,6 +47,8 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Application- and SQLite-level regression tests for stale Project/Entry writers and lost-update prevention.
 - WinForms `--data-root` startup option for isolated acceptance, experiment and support data sets without changing Core path abstractions.
 - Non-visual WinForms host tests for strict startup-option parsing and isolated data-root resolution.
+- Dedicated desktop concurrency-conflict presentation and host regression tests that explain blocked stale saves without discarding unsaved editor text.
+- `docs/085_V1_Concurrency_Conflict_UX.md` documenting the V1 stale-editor recovery contract and deliberate absence of automatic merge/retry.
 
 ### Changed
 
@@ -63,6 +65,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Project and Entry mutation use cases now require the version originally observed by the caller; SQLite repeats the version predicate to protect the race between Application validation and persistence.
 - Optimistic-concurrency conflicts now surface as the profile-neutral `OptimisticConcurrencyException` regardless of whether the conflict is detected by Application logic or the SQLite adapter.
 - Desktop startup validates host options before directory creation, migration or DI setup; malformed options fail rather than silently selecting the normal per-user data directory.
+- The WinForms Entry editor now handles optimistic-concurrency conflicts separately from ordinary failures: it leaves unsaved fields untouched, shows a warning rather than a generic error, and tells the user to preserve/compare/merge before a conscious reload and retry.
 
 ### Fixed
 
@@ -71,6 +74,7 @@ The project follows a pragmatic form of Semantic Versioning while it is below 1.
 - Aligned template listing with template creation rules so a specialist profile can discover the shared general templates it is allowed to use.
 - Prevented a stale Project/Entry editor from overwriting a newer persisted version merely because the Application service reloaded that newer version immediately before saving.
 - Prevented an invalid acceptance/test data-root command from silently falling back to the normal Workbench data location.
+- Prevented a rejected stale Entry save from being presented as an undifferentiated desktop error with no safe recovery guidance.
 
 ## [0.0.0] - 2026-05-12
 
