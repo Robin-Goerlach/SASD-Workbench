@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using SASD.Workbench.Application.Interfaces;
 using SASD.Workbench.Domain.Entities;
+using SASD.Workbench.Domain.Metadata;
+using SASD.Workbench.Infrastructure.Activity;
 using SASD.Workbench.Infrastructure.Database;
 
 namespace SASD.Workbench.Infrastructure.Repositories;
@@ -12,9 +14,13 @@ namespace SASD.Workbench.Infrastructure.Repositories;
 public sealed class SqliteCollectionRepository : ICollectionRepository
 {
     private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteActivityWriter _activity;
 
-    public SqliteCollectionRepository(SqliteConnectionFactory connections)
-        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+    public SqliteCollectionRepository(SqliteConnectionFactory connections, SqliteActivityWriter activity)
+    {
+        _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
+    }
 
     public async Task<Collection?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -36,7 +42,9 @@ public sealed class SqliteCollectionRepository : ICollectionRepository
     {
         ArgumentNullException.ThrowIfNull(collection);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO collections
                 (id, project_id, parent_collection_id, name, description, created_at, updated_at, sort_order, is_deleted, deleted_at)
@@ -45,13 +53,26 @@ public sealed class SqliteCollectionRepository : ICollectionRepository
             """;
         AddParameters(command, collection);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            CoreActivityTypes.CollectionCreated,
+            $"Created collection '{collection.Name}'.",
+            projectId: collection.ProjectId,
+            newValue: collection.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task UpdateAsync(Collection collection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(collection);
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             UPDATE collections
             SET parent_collection_id = $parentId, name = $name, description = $description,
@@ -64,27 +85,81 @@ public sealed class SqliteCollectionRepository : ICollectionRepository
         {
             throw new InvalidOperationException($"Collection '{collection.Id}' does not exist.");
         }
+
+        await _activity.WriteAsync(
+            connection,
+            transaction,
+            collection.IsDeleted ? CoreActivityTypes.CollectionDeleted : CoreActivityTypes.CollectionUpdated,
+            $"Persisted collection '{collection.Name}'.",
+            projectId: collection.ProjectId,
+            newValue: collection.Id.ToString("D"),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        transaction.Commit();
     }
 
     public async Task AddEntryAsync(Guid collectionId, Guid entryId, DateTime createdAtUtc, CancellationToken cancellationToken = default)
     {
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "INSERT OR IGNORE INTO entry_collections(entry_id, collection_id, created_at) VALUES ($entryId, $collectionId, $createdAt);";
         command.Parameters.AddWithValue("$entryId", entryId.ToString("D"));
         command.Parameters.AddWithValue("$collectionId", collectionId.ToString("D"));
         command.Parameters.AddWithValue("$createdAt", FormatUtc(createdAtUtc));
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        // INSERT OR IGNORE is intentionally idempotent. Only a newly-created membership is history.
+        if (rows == 1)
+        {
+            var projectId = await _activity.RequireProjectIdForCollectionAsync(
+                connection, transaction, collectionId, cancellationToken).ConfigureAwait(false);
+            await _activity.WriteAsync(
+                connection,
+                transaction,
+                CoreActivityTypes.CollectionEntryAdded,
+                $"Added entry '{entryId:D}' to collection '{collectionId:D}'.",
+                projectId: projectId,
+                entryId: entryId,
+                newValue: collectionId.ToString("D"),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        transaction.Commit();
     }
 
     public async Task RemoveEntryAsync(Guid collectionId, Guid entryId, CancellationToken cancellationToken = default)
     {
         await using var connection = await _connections.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
+
+        // Resolve the project before deleting the membership. The collection itself remains present,
+        // but resolving first also makes the activity context explicit and easy to review.
+        var projectId = await _activity.RequireProjectIdForCollectionAsync(
+            connection, transaction, collectionId, cancellationToken).ConfigureAwait(false);
+
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "DELETE FROM entry_collections WHERE entry_id = $entryId AND collection_id = $collectionId;";
         command.Parameters.AddWithValue("$entryId", entryId.ToString("D"));
         command.Parameters.AddWithValue("$collectionId", collectionId.ToString("D"));
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (rows == 1)
+        {
+            await _activity.WriteAsync(
+                connection,
+                transaction,
+                CoreActivityTypes.CollectionEntryRemoved,
+                $"Removed entry '{entryId:D}' from collection '{collectionId:D}'.",
+                projectId: projectId,
+                entryId: entryId,
+                oldValue: collectionId.ToString("D"),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        transaction.Commit();
     }
 
     private async Task<IReadOnlyList<Collection>> ListAsync(string predicate, Guid id, CancellationToken cancellationToken)
