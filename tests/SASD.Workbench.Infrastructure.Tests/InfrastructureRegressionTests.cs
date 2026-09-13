@@ -14,48 +14,57 @@ public sealed class InfrastructureRegressionTests
     [Fact]
     public async Task Migrations_AreIdempotentAndExpectedVersionCountIsApplied()
     {
-        using var workbench = await TestWorkbench.CreateAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var workbench = await TestWorkbench.CreateAsync(cancellationToken);
         var migrator = workbench.GetRequiredService<DatabaseMigrator>();
         var connections = workbench.GetRequiredService<SqliteConnectionFactory>();
 
         // The fixture already migrated once. A second pass must be a no-op rather than applying the
         // same embedded script twice or introducing duplicate schema_migrations rows.
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(cancellationToken);
 
-        await using var connection = await connections.OpenConnectionAsync();
+        await using var connection = await connections.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM schema_migrations;";
-        var migrationCount = Convert.ToInt64(await command.ExecuteScalarAsync());
+        var migrationCount = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
         Assert.Equal(3, migrationCount);
     }
 
     [Fact]
     public async Task Search_TreatsPercentAndUnderscoreAsLiteralUserText()
     {
-        using var workbench = await TestWorkbench.CreateAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var workbench = await TestWorkbench.CreateAsync(cancellationToken);
         var projects = workbench.GetRequiredService<ProjectService>();
         var entries = workbench.GetRequiredService<EntryService>();
         var search = workbench.GetRequiredService<SearchService>();
-        var project = await projects.CreateAsync("Search escaping");
+        var project = await projects.CreateAsync("Search escaping", cancellationToken: cancellationToken);
 
         var percentEntry = await entries.CreateAsync(
             project.Id,
             CoreEntryTypes.Note,
             "Percent",
-            contentMarkdown: "Measured 100% completion.");
+            contentMarkdown: "Measured 100% completion.",
+            cancellationToken: cancellationToken);
         var underscoreEntry = await entries.CreateAsync(
             project.Id,
             CoreEntryTypes.Note,
             "Underscore",
-            contentMarkdown: "Machine key custom_relation.");
+            contentMarkdown: "Machine key custom_relation.",
+            cancellationToken: cancellationToken);
         await entries.CreateAsync(
             project.Id,
             CoreEntryTypes.Note,
             "Control",
-            contentMarkdown: "Plain text without wildcard characters.");
+            contentMarkdown: "Plain text without wildcard characters.",
+            cancellationToken: cancellationToken);
 
-        var percentResults = await search.SearchAsync(new EntrySearchQuery(Text: "%", ProjectId: project.Id));
-        var underscoreResults = await search.SearchAsync(new EntrySearchQuery(Text: "_", ProjectId: project.Id));
+        var percentResults = await search.SearchAsync(
+            new EntrySearchQuery(Text: "%", ProjectId: project.Id),
+            cancellationToken);
+        var underscoreResults = await search.SearchAsync(
+            new EntrySearchQuery(Text: "_", ProjectId: project.Id),
+            cancellationToken);
 
         Assert.Single(percentResults);
         Assert.Equal(percentEntry.Id, percentResults[0].Id);
@@ -66,21 +75,30 @@ public sealed class InfrastructureRegressionTests
     [Fact]
     public async Task AttachmentActivityFailure_RollsBackMetadataAndDeletesCopiedFile()
     {
-        using var workbench = await TestWorkbench.CreateAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var workbench = await TestWorkbench.CreateAsync(cancellationToken);
         var projects = workbench.GetRequiredService<ProjectService>();
         var entries = workbench.GetRequiredService<EntryService>();
         var attachments = workbench.GetRequiredService<AttachmentService>();
         var connections = workbench.GetRequiredService<SqliteConnectionFactory>();
 
-        var project = await projects.CreateAsync("Attachment compensation");
-        var entry = await entries.CreateAsync(project.Id, CoreEntryTypes.Note, "Entry");
+        var project = await projects.CreateAsync("Attachment compensation", cancellationToken: cancellationToken);
+        var entry = await entries.CreateAsync(
+            project.Id,
+            CoreEntryTypes.Note,
+            "Entry",
+            cancellationToken: cancellationToken);
         var sourcePath = Path.Combine(workbench.RootDirectory, "source.txt");
-        await File.WriteAllTextAsync(sourcePath, "Attachment failure-path payload", Encoding.UTF8);
+        await File.WriteAllTextAsync(
+            sourcePath,
+            "Attachment failure-path payload",
+            Encoding.UTF8,
+            cancellationToken);
 
         // Fail after attachment metadata was inserted but before its transaction can commit. This is
         // intentionally stronger than failing the metadata INSERT itself: it proves that the SQLite
         // transaction rolls metadata back and AttachmentService compensates the already-copied file.
-        await using (var connection = await connections.OpenConnectionAsync())
+        await using (var connection = await connections.OpenConnectionAsync(cancellationToken))
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = $"""
@@ -91,12 +109,13 @@ public sealed class InfrastructureRegressionTests
                     SELECT RAISE(FAIL, 'forced attachment activity failure');
                 END;
                 """;
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await Assert.ThrowsAnyAsync<Exception>(() => attachments.AddAsync(entry.Id, sourcePath, "Should roll back"));
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => attachments.AddAsync(entry.Id, sourcePath, "Should roll back", cancellationToken));
 
-        var persisted = await attachments.ListByEntryAsync(entry.Id);
+        var persisted = await attachments.ListByEntryAsync(entry.Id, cancellationToken);
         Assert.Empty(persisted);
         Assert.Empty(Directory.EnumerateFiles(workbench.Paths.AttachmentsDirectory, "*", SearchOption.AllDirectories));
     }
@@ -104,11 +123,12 @@ public sealed class InfrastructureRegressionTests
     [Fact]
     public async Task AutomaticActivityFailure_RollsBackPrimaryProjectMutation()
     {
-        using var workbench = await TestWorkbench.CreateAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var workbench = await TestWorkbench.CreateAsync(cancellationToken);
         var projects = workbench.GetRequiredService<ProjectService>();
         var connections = workbench.GetRequiredService<SqliteConnectionFactory>();
 
-        await using (var connection = await connections.OpenConnectionAsync())
+        await using (var connection = await connections.OpenConnectionAsync(cancellationToken))
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = $"""
@@ -119,10 +139,11 @@ public sealed class InfrastructureRegressionTests
                     SELECT RAISE(FAIL, 'forced project activity failure');
                 END;
                 """;
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await Assert.ThrowsAnyAsync<Exception>(() => projects.CreateAsync("Must not survive"));
-        Assert.Empty(await projects.ListAsync());
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => projects.CreateAsync("Must not survive", cancellationToken: cancellationToken));
+        Assert.Empty(await projects.ListAsync(cancellationToken));
     }
 }
